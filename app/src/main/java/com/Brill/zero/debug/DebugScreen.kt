@@ -18,6 +18,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.system.measureTimeMillis
+import org.json.JSONObject
+import com.brill.zero.data.repo.ZeroRepository
+import com.brill.zero.data.db.TodoEntity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,6 +32,7 @@ fun DebugScreen() {
     val l1 = remember { PriorityClassifier(ctx) }
     val nlp = remember { NlpProcessor(ctx) }
     val slm = remember { nlp.l3SlmProcessor }
+    val repo = remember { com.brill.zero.data.repo.ZeroRepository.get(ctx) }
 
     // 线程选择（默认使用设备可用核心数的上限 8）
     val cores = remember { Runtime.getRuntime().availableProcessors() }
@@ -151,13 +155,47 @@ fun DebugScreen() {
                                 }
 
                                 val todo = slm.process(input, resolved)
-                                val intentInfo = l3ResolvedIntent?.let { "intent=$it" } ?: ""
-                                todo?.let { "Todo(title=${it.title}, due=${it.dueAt})  $intentInfo" } ?: "null  $intentInfo"
+                                // 以统一 JSON 形式展示调试输出（intent/summary/due_time）
+                                todo?.let {
+                                    val intentVal = l3ResolvedIntent ?: resolved
+                                    val summaryVal = it.title
+                                    val dueEpoch = it.dueAt
+                                    val dueEpochField = if (dueEpoch == null) "null" else dueEpoch.toString()
+                                    """{ "intent": ${JSONObject.quote(intentVal)}, "summary": ${JSONObject.quote(summaryVal)}, "due_time_epoch": $dueEpochField }"""
+                                } ?: run {
+                                    val intentVal = l3ResolvedIntent ?: resolved
+                                    """{ "intent": ${JSONObject.quote(intentVal)}, "summary": "", "due_time_epoch": null }"""
+                                }
                             }
                         }
                         l3Time = t
                     }
                 }) { Text("RUN L3") }
+                // 一键创建 To‑Do（从 L3 JSON）
+                Button(enabled = l3Out != null, onClick = {
+                    val json = l3Out
+                    if (!json.isNullOrBlank()) {
+                        runCatching {
+                            val obj = JSONObject(json)
+                            val title = obj.optString("summary").ifBlank { null }
+                            val intentVal = obj.optString("intent").ifBlank { null }
+                            val dueEpoch = obj.opt("due_time_epoch")?.toString()?.toLongOrNull()
+                            if (title != null) {
+                                scope.launch {
+                                    repo.saveTodo(
+                                        TodoEntity(
+                                            title = title,
+                                            dueAt = dueEpoch,
+                                            createdAt = System.currentTimeMillis(),
+                                            status = "OPEN",
+                                            sourceNotificationKey = intentVal
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }) { Text("Add To‑Do") }
             }
             Text(resultLine(l3Out, l3Time))
 

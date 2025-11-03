@@ -22,6 +22,14 @@ class ZeroRepository private constructor(private val db: ZeroDatabase) {
         db.todoDao().upsert(todo)
     }
 
+    suspend fun markTodoDone(id: Long) = withContext(Dispatchers.IO) {
+        db.todoDao().markDone(id)
+    }
+
+    suspend fun getNextOpenTodo(): TodoEntity? = withContext(Dispatchers.IO) {
+        db.todoDao().getNextOpen()
+    }
+
 
     suspend fun nextMediumBatch(limit: Int = 25) = db.notificationDao().nextUnprocessedMedium(limit)
 

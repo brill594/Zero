@@ -23,7 +23,10 @@ fun DashboardScreen(onOpenTodos: () -> Unit, onOpenHistory: () -> Unit,    onOpe
     }
 
     Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp)
+            .padding(top = 120.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
