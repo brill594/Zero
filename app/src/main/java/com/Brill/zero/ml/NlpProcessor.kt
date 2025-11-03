@@ -4,8 +4,11 @@ import android.content.Context
 import android.util.Log
 import com.brill.zero.domain.model.Todo
 import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.core.Delegate
 import com.google.mediapipe.tasks.text.textclassifier.TextClassifier
 import com.google.mediapipe.tasks.text.textclassifier.TextClassifierResult
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 
 // 结果类型（命名去下划线）
 sealed class L2ProcessResult {
@@ -18,6 +21,7 @@ sealed class L2ProcessResult {
  * L2 (分流器) + L3-A (RegEx 即时引擎) —— MediaPipe Tasks-Text 版本
  */
 class NlpProcessor(context: Context) {
+    private val appContext = context.applicationContext
 
     private val modelPath = "models/l2_processor_intent.tflite"
 
@@ -28,6 +32,9 @@ class NlpProcessor(context: Context) {
     private val L3_REGEX_INTENTS = setOf("验证码", "未接来电")
     private val L3_SLM_INTENTS   = setOf("工作沟通", "日程提醒", "社交闲聊", "财务变动", "物流信息")
 
+    // 序列化 MediaPipe 调用，避免并发导致 native 崩溃
+    private val intentLock = ReentrantLock()
+
     // L2 模型加载（MediaPipe）
     private val intentClassifier: TextClassifier by lazy {
         Log.i("ZeroL2-MP", "正在加载 L2 (MobileBERT) MediaPipe 模型 from: $modelPath")
@@ -35,14 +42,14 @@ class NlpProcessor(context: Context) {
         try {
             val baseOptions = BaseOptions.builder()
                 .setModelAssetPath(modelPath)
-                // .setNumThreads(4) // 个别版本无该方法，先省略保持兼容
+                .setDelegate(Delegate.CPU) // 显式使用 CPU，规避 NNAPI/GPU 委托的潜在原生崩溃
                 .build()
 
             val options = TextClassifier.TextClassifierOptions.builder()
                 .setBaseOptions(baseOptions)
                 .build()
 
-            val classifier = TextClassifier.createFromOptions(context, options)
+            val classifier = TextClassifier.createFromOptions(appContext, options)
             Log.i("ZeroL2-MP", "L2 模型加载成功")
             classifier
         } catch (e: Exception) {
@@ -53,7 +60,9 @@ class NlpProcessor(context: Context) {
 
     /** 核心分流 */
     fun processNotification(fullText: String): L2ProcessResult {
-        val result: TextClassifierResult = intentClassifier.classify(fullText)
+        val result: TextClassifierResult = intentLock.withLock {
+            intentClassifier.classify(fullText)
+        }
 
         // 先取 classificationResult() 再取 classifications → categories
         val bestCategory = result.classificationResult()
@@ -115,7 +124,7 @@ class NlpProcessor(context: Context) {
     }
     // 仅调试用：直接跑 L2 分类，返回 Top-1 (label, score)
     fun debugTopIntent(text: String): Pair<String, Float>? {
-        val r = intentClassifier.classify(text)
+        val r = intentLock.withLock { intentClassifier.classify(text) }
             .classificationResult()
             .classifications()
             .firstOrNull()

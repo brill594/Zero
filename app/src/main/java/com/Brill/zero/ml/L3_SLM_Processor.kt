@@ -15,7 +15,7 @@ import java.util.regex.Pattern
  * - 若尚未集成，则 fallback 为 Stub（保持当前可运行）
  */
 class L3_SLM_Processor(private val context: Context) {
-    private val grammarAssetPath = "grammar/json_ie.gbnf"
+    private val grammarAssetPath = "Grammar/json_ie.gbnf"
 
     // 懒加载并缓存 GBNF 文本；读取失败返回 null（会自动 fallback）
     private val grammarText: String? by lazy {
@@ -70,7 +70,7 @@ class L3_SLM_Processor(private val context: Context) {
     private fun tryRunViaJNI(prompt: String, maxNewTokens: Int = 160): String? {
         return try {
             // 通过反射调用：com.Brill.zero.llama.Llama（若未集成会抛异常→ fallback）
-            val clazz = Class.forName("com.Brill.zero.llama.Llama")
+            val clazz = Class.forName("com.brill.zero.llama.Llama")
             val mInit = clazz.getMethod(
                 "nativeInit",
                 String::class.java, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType
@@ -167,7 +167,7 @@ class L3_SLM_Processor(private val context: Context) {
         val v = verbs.firstOrNull { t.contains(it) } ?: "处理"
         val core = t.take(28).removePrefix("【").removePrefix("通知").removePrefix("消息")
         val s = if (core.startsWith(v)) core else "$v $core"
-        return s.take(15)
+        return s.take(60)
     }
 
     private fun guessDeadlineText(text: String): String {

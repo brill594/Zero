@@ -40,6 +40,8 @@ fun DebugScreen() {
 
     val l3Intents = remember { nlp.debugL3Intents() }
     var l3Intent by remember { mutableStateOf(l3Intents.first()) }
+    var l3UseL2 by remember { mutableStateOf(true) }
+    var l3ResolvedIntent by remember { mutableStateOf<String?>(null) }
     var l3Out by remember { mutableStateOf<String?>(null) }
     var l3Time by remember { mutableStateOf<Long?>(null) }
 
@@ -111,19 +113,38 @@ fun DebugScreen() {
 
             // ---- L3 ----
             SectionTitle("L3 · SLM (Qwen / 本地)")
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Switch(checked = l3UseL2, onCheckedChange = { l3UseL2 = it })
+                Spacer(Modifier.width(8.dp))
+                Text(if (l3UseL2) "使用 L2 预测意图" else "手动选择意图")
+            }
+            Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                IntentDropdown(l3Intents, l3Intent, onSelect = { l3Intent = it })
+                IntentDropdown(l3Intents, l3Intent, onSelect = { l3Intent = it }, modifier = Modifier.weight(1f))
                 Button(onClick = {
                     scope.launch {
                         val t = measureTimeMillis {
                             l3Out = withContext(Dispatchers.Default) {
-                                val todo = slm.process(input, l3Intent)
-                                todo?.let { "Todo(title=${it.title}, due=${it.dueAt})" } ?: "null"
+                                val resolved = if (l3UseL2) {
+                                    val top = nlp.debugTopIntent(input)
+                                    l3ResolvedIntent = top?.first ?: l3Intent
+                                    val p = top?.second
+                                    val intentText = top?.first?.let { if (p != null) "$it (p=${"%.2f".format(p)})" else it }
+                                    l3ResolvedIntent = intentText ?: l3Intent
+                                    top?.first ?: l3Intent
+                                } else {
+                                    l3ResolvedIntent = l3Intent
+                                    l3Intent
+                                }
+
+                                val todo = slm.process(input, resolved)
+                                val intentInfo = l3ResolvedIntent?.let { "intent=$it" } ?: ""
+                                todo?.let { "Todo(title=${it.title}, due=${it.dueAt})  $intentInfo" } ?: "null  $intentInfo"
                             }
                         }
                         l3Time = t
                     }
-                }) { Text("Run L3") }
+                }) { Text("RUN L3") }
             }
             Text(resultLine(l3Out, l3Time))
 
@@ -148,13 +169,15 @@ private fun IntentDropdown(
     options: List<String>,
     selected: String,
     onSelect: (String) -> Unit,
-    label: String = "意图"
+    label: String = "意图",
+    modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
 
     ExposedDropdownMenuBox(
         expanded = expanded,
         onExpandedChange = { expanded = it },
+        modifier = modifier
     ) {
         OutlinedTextField(
             value = selected,

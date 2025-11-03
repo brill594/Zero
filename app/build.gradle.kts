@@ -124,7 +124,8 @@ dependencies {
 
 // TFLite + Task library for text (MobileBERT, classifiers)
 
-    implementation("com.google.mediapipe:tasks-text:0.20230731")
+    // Upgrade MediaPipe Tasks Text to align with model metadata parser versions
+    implementation("com.google.mediapipe:tasks-text:0.10.14")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
 // Coroutines
