@@ -1,5 +1,8 @@
-<?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.Zero" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- App 主题，作为 Manifest 的 android:theme 引用 -->
+    <style name="Theme.Zero" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- 可选：透明状态栏 / 导航栏等 -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
+    </style>
 </resources>

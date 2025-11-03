@@ -1,4 +1,4 @@
-package com.Brill.zero.llama
+package com.brill.zero.llama
 
 object Llama {
     init { System.loadLibrary("llamajni") }

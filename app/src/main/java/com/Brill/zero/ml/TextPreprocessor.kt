@@ -1,4 +1,4 @@
-package com.Brill.zero.ml
+package com.brill.zero.ml
 
 
 object TextPreprocessor {

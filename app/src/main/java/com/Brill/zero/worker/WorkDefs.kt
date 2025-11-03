@@ -1,4 +1,4 @@
-package com.Brill.zero.worker
+package com.brill.zero.worker
 
 object WorkDefs {
     // 入参键名（Worker InputData）

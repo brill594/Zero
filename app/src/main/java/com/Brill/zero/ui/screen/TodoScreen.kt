@@ -1,4 +1,4 @@
-package com.Brill.zero.ui.screen
+package com.brill.zero.ui.screen
 
 
 import androidx.compose.foundation.layout.*
@@ -8,8 +8,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.Brill.zero.data.repo.ZeroRepository
-import kotlinx.coroutines.flow.collectLatest
+import com.brill.zero.data.repo.ZeroRepository
+import androidx.compose.ui.platform.LocalContext      // ← 新增
 
 
 @Composable

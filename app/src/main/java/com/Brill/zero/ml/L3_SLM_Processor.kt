@@ -1,14 +1,12 @@
-package com.Brill.zero.ml
+package com.brill.zero.ml
 
 import android.content.Context
 import android.util.Log
-import com.Brill.zero.domain.model.Todo
+import com.brill.zero.domain.model.Todo
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.time.*
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 import java.util.regex.Pattern
 
 /**

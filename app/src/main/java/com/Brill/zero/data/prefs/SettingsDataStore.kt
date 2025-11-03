@@ -1,4 +1,4 @@
-package com.Brill.zero.data.prefs
+package com.brill.zero.data.prefs
 
 import android.content.Context
 import androidx.datastore.preferences.core.*

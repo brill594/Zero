@@ -1,11 +1,14 @@
+import com.android.build.api.dsl.Packaging
+
 plugins {
     id("com.android.application")
     kotlin("android")
     id("com.google.devtools.ksp")
+    id("org.jetbrains.kotlin.plugin.compose") version "2.1.0"
 }
 
 android {
-    namespace = "com.Brill.zero"
+    namespace = "com.brill.zero"
     compileSdk = 36
 
     defaultConfig {
@@ -56,7 +59,18 @@ android {
         buildConfig = true
     }
     androidResources {
-        noCompress += listOf("tflite", "gguf") // 允许 mmap 加载
+        // 写扩展名，不要带点
+        noCompress += listOf("tflite", "task", "gguf", "lite")
+    }
+    packaging {
+        resources {
+            // 这里不能写 noCompress；保留你需要的 pickFirsts / excludes
+            pickFirsts += setOf("**/libc++_shared.so")
+        }
+    }
+    buildFeatures { buildConfig = true }
+    fun Packaging.() {
+        resources.pickFirsts.add("**/libc++_shared.so")
     }
 }
 
@@ -68,6 +82,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
     debugImplementation("androidx.compose.ui:ui-tooling")
+    implementation("com.google.android.material:material:1.12.0") // 或更高稳定版
 
 
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
@@ -76,7 +91,9 @@ dependencies {
 
 
 // Glance (AppWidget in Compose style)
-    implementation("androidx.glance:glance-appwidget:1.1.0")
+    implementation("androidx.glance:glance-appwidget:1.1.1")
+    implementation("androidx.glance:glance-material3:1.1.1") // ← 新增
+
 
 
 // Room + KSP
@@ -94,10 +111,8 @@ dependencies {
 
 
 // TFLite + Task library for text (MobileBERT, classifiers)
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
-    implementation("org.tensorflow:tensorflow-lite-task-text:0.4.4")
 
+    implementation("com.google.mediapipe:tasks-text:0.20230731")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
 // Coroutines

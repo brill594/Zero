@@ -1,11 +1,11 @@
-package com.Brill.zero
+package com.brill.zero
 
 
 import android.app.Application
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
-import com.Brill.zero.worker.NightlyTrainingWorker
+import com.brill.zero.worker.NightlyTrainingWorker
 import java.util.concurrent.TimeUnit
 
 

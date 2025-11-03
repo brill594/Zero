@@ -1,26 +1,20 @@
-package com.Brill.zero.domain.usecase
+package com.brill.zero.domain.usecase
 
 import android.content.Context
-import com.Brill.zero.data.db.NotificationEntity
-import com.Brill.zero.data.db.TodoEntity
-import com.Brill.zero.data.repo.ZeroRepository
-import com.Brill.zero.domain.model.Priority
-import com.Brill.zero.ml.NlpProcessor
-import com.Brill.zero.ml.PriorityClassifier
+import com.brill.zero.data.db.NotificationEntity
+import com.brill.zero.data.db.TodoEntity
+import com.brill.zero.data.repo.ZeroRepository
+import com.brill.zero.domain.model.Priority
+import com.brill.zero.ml.L2ProcessResult
+import com.brill.zero.ml.NlpProcessor
+import com.brill.zero.ml.PriorityClassifier
 
-/**
- * 单条通知的同步处理：分级 -> 入库 -> (必要时) 生成 ToDo
- * 在 NotificationListenerService 或测试代码里直接调用即可。
- */
 class ProcessIncomingNotification(private val context: Context) {
 
     private val repo by lazy { ZeroRepository.get(context) }
     private val stage1 by lazy { PriorityClassifier(context) }
-    private val stage2 by lazy { NlpProcessor(context) }
+    private val stage2 by lazy { NlpProcessor(context) }  // 提供 L2/L3
 
-    /**
-     * @return 实际写入的 NotificationEntity.id 以及是否生成了 ToDo
-     */
     suspend operator fun invoke(
         key: String,
         pkg: String,
@@ -30,29 +24,49 @@ class ProcessIncomingNotification(private val context: Context) {
         val full = listOfNotNull(title, text).joinToString(" · ")
         val priority = stage1.predictPriority(full)
 
-        val entity = NotificationEntity(
-            key = key,
-            pkg = pkg,
-            title = title,
-            text = text,
-            postedAt = System.currentTimeMillis(),
-            priority = priority.name
+        val id = repo.saveNotification(
+            NotificationEntity(
+                key = key,
+                pkg = pkg,
+                title = title,
+                text = text,
+                postedAt = System.currentTimeMillis(),
+                priority = priority.name
+            )
         )
-        val id = repo.saveNotification(entity)
 
         var todoCreated = false
         if (priority == Priority.HIGH) {
-            stage2.toTodo(full)?.let { todo ->
-                repo.saveTodo(
-                    TodoEntity(
-                        title = todo.title,
-                        dueAt = todo.dueAt,
-                        createdAt = System.currentTimeMillis(),
-                        status = "OPEN",
-                        sourceNotificationKey = key
+            when (val res = stage2.processNotification(full)) {
+                is L2ProcessResult.Handled -> {
+                    val t = res.todo
+                    repo.saveTodo(
+                        TodoEntity(
+                            title = t.title,
+                            dueAt = t.dueAt,
+                            createdAt = System.currentTimeMillis(),
+                            status = "OPEN",
+                            sourceNotificationKey = key
+                        )
                     )
-                )
-                todoCreated = true
+                    todoCreated = true
+                }
+                is L2ProcessResult.RequiresL3Slm -> {                 // ✅ 新分支名
+                    val t = stage2.l3SlmProcessor.process(full, res.intent) // ✅ 复用实例
+                    if (t != null) {
+                        repo.saveTodo(
+                            TodoEntity(
+                                title = t.title,
+                                dueAt = t.dueAt,
+                                createdAt = System.currentTimeMillis(),
+                                status = "OPEN",
+                                sourceNotificationKey = key
+                            )
+                        )
+                        todoCreated = true
+                    }
+                }
+                L2ProcessResult.Ignore -> { /* 忽略 */ }               // ✅ object 分支不加 is
             }
         }
         return id to todoCreated

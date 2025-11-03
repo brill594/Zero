@@ -1,21 +1,26 @@
-package com.Brill.zero.ui.nav
+package com.brill.zero.ui.nav
 
 
 import androidx.compose.runtime.Composable
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.Brill.zero.ui.screen.DashboardScreen
-import com.Brill.zero.ui.screen.TodoScreen
-import com.Brill.zero.ui.screen.HistoryScreen
+import com.brill.zero.ui.screen.DashboardScreen
+import com.brill.zero.ui.screen.TodoScreen
+import com.brill.zero.ui.screen.HistoryScreen
+import com.brill.zero.BuildConfig
+import com.brill.zero.debug.DebugScreen
+
 
 
 @Composable
 fun ZeroNavGraph() {
     val nav = rememberNavController()
     NavHost(navController = nav, startDestination = "dashboard") {
-        composable("dashboard") { DashboardScreen(onOpenTodos = { nav.navigate("todos") }, onOpenHistory = { nav.navigate("history") }) }
+        composable("dashboard") { DashboardScreen(onOpenTodos = { nav.navigate("todos") }, onOpenHistory = { nav.navigate("history") },onOpenDebug={nav.navigate("debug")}) }
         composable("todos") { TodoScreen() }
         composable("history") { HistoryScreen() }
+        composable("debug") { DebugScreen() }   // ★ 你的调试页
+
     }
 }

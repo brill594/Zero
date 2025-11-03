@@ -1,4 +1,4 @@
-package com.Brill.zero.domain.model
+package com.brill.zero.domain.model
 
 
 enum class Priority { HIGH, MEDIUM, LOW }

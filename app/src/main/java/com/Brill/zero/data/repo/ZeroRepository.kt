@@ -1,7 +1,7 @@
-package com.Brill.zero.data.repo
+package com.brill.zero.data.repo
 
 import android.content.Context
-import com.Brill.zero.data.db.*
+import com.brill.zero.data.db.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

@@ -1,4 +1,4 @@
-package com.Brill.zero
+package com.brill.zero
 
 import org.junit.Test
 

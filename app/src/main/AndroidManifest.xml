@@ -2,8 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-    <!-- Required by NotificationListenerService -->
-    <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"/>
+    <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
 
     <application
         android:name=".ZeroApp"
@@ -12,8 +11,7 @@
         android:icon="@mipmap/ic_launcher"
         android:label="Zero"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Material3.DayNight.NoActionBar">
-        <activity
+        android:theme="@style/Theme.Zero">
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -43,14 +41,6 @@
         </receiver>
 
 
-        <!-- Reschedule background work on boot -->
-        <receiver android:name="androidx.work.impl.background.systemalarm.RescheduleReceiver"
-            android:enabled="true"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-            </intent-filter>
-        </receiver>
+
     </application>
 </manifest>

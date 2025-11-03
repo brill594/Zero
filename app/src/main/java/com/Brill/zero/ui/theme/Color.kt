@@ -1,4 +1,4 @@
-package com.Brill.zero.ui.theme
+package com.brill.zero.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

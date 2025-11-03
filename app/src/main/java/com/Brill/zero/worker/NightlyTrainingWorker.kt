@@ -1,4 +1,4 @@
-package com.Brill.zero.worker
+package com.brill.zero.worker
 
 
 import android.content.Context
@@ -6,10 +6,6 @@ import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.NetworkType
-import androidx.work.ForegroundInfo
-import androidx.work.WorkRequest
-import androidx.work.PeriodicWorkRequestBuilder
-import com.Brill.zero.data.repo.ZeroRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

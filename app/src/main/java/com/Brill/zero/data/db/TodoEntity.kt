@@ -1,4 +1,4 @@
-package com.Brill.zero.data.db
+package com.brill.zero.data.db
 
 
 import androidx.room.Entity
