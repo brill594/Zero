@@ -1,7 +1,12 @@
 cmake_minimum_required(VERSION 3.22)
 project(zero_llama LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+# 导出编译命令，方便 IDE/静态分析正确解析 includePath
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # 这份 CMakeLists 在 app/src/main/cpp
 set(LLAMA_DIR "${CMAKE_CURRENT_LIST_DIR}/../../../../third_party/llama.cpp")
@@ -35,6 +40,12 @@ target_include_directories(llamajni BEFORE PRIVATE
         # 如需 grammar（llama-grammar.h），再加：
         # ${LLAMA_DIR}/src
 )
+
+# 显式加入 NDK sysroot 头文件目录，解决 IDE 提示找不到 jni.h / android/log.h
+if (CMAKE_SYSROOT)
+    message(STATUS "Android sysroot: ${CMAKE_SYSROOT}")
+    target_include_directories(llamajni PRIVATE ${CMAKE_SYSROOT}/usr/include)
+endif()
 
 target_link_libraries(llamajni
         PRIVATE

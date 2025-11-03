@@ -72,7 +72,7 @@ static inline void batch_push_token(llama_batch& batch,
 static inline void batch_clear_tokens(llama_batch& batch) { batch.n_tokens = 0; }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_Brill_zero_llama_Llama_nativeInit(
+Java_com_brill_zero_llama_Llama_nativeInit(
         JNIEnv* env, jobject /*thiz*/,
         jstring jModelPath, jint nCtx, jint /*nGpuLayers*/, jint nThreads) {
 
@@ -109,7 +109,7 @@ Java_com_Brill_zero_llama_Llama_nativeInit(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_com_Brill_zero_llama_Llama_nativeCompletion(
+Java_com_brill_zero_llama_Llama_nativeCompletion(
         JNIEnv* env, jobject /*thiz*/, jlong handle,
         jstring jPrompt, jstring /*jGrammar*/, jint maxTokens, jfloat /*temp*/, jfloat /*top_p*/, jint /*seed*/) {
 
@@ -175,7 +175,7 @@ Java_com_Brill_zero_llama_Llama_nativeCompletion(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_Brill_zero_llama_Llama_nativeFree(JNIEnv*, jobject, jlong handle) {
+Java_com_brill_zero_llama_Llama_nativeFree(JNIEnv*, jobject, jlong handle) {
     auto* st = reinterpret_cast<LlamaState*>(handle);
     if (!st) return;
     if (st->ctx)   llama_free(st->ctx);
