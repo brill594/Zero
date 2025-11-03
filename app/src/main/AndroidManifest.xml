@@ -3,6 +3,17 @@
     xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    
+    <!-- Required for ML model loading -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>
+    
+    <!-- Optional: Add features for better compatibility -->
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false"/>
 
     <application
         android:name=".ZeroApp"
@@ -11,7 +22,10 @@
         android:icon="@mipmap/ic_launcher"
         android:label="Zero"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Zero">
+        android:theme="@style/Theme.Zero"
+        android:enableOnBackInvokedCallback="true"
+        android:largeHeap="true"
+        android:hardwareAccelerated="true">
         <activity
             android:name=".MainActivity"
             android:exported="true">

@@ -31,11 +31,21 @@ android {
     defaultConfig {
         externalNativeBuild {
             cmake {
-                arguments += listOf("-DANDROID_STL=c++_shared")
+                arguments += listOf(
+                    "-DANDROID_STL=c++_shared",
+                    "-DCMAKE_BUILD_TYPE=Release",
+                    "-DANDROID_ARM_NEON=ON"
+                )
             }
         }
         ndk {
             abiFilters += listOf("arm64-v8a")
+        }
+        // Add packaging options to prevent conflicts
+        packagingOptions {
+            jniLibs {
+                useLegacyPackaging = true
+            }
         }
     }
     buildTypes {
@@ -66,12 +76,14 @@ android {
         resources {
             // 这里不能写 noCompress；保留你需要的 pickFirsts / excludes
             pickFirsts += setOf("**/libc++_shared.so")
+            pickFirsts += setOf("**/libllamajni.so")
+            excludes += setOf("META-INF/DEPENDENCIES", "META-INF/LICENSE", "META-INF/LICENSE.txt", "META-INF/NOTICE")
+        }
+        jniLibs {
+            useLegacyPackaging = true
         }
     }
     buildFeatures { buildConfig = true }
-    fun Packaging.() {
-        resources.pickFirsts.add("**/libc++_shared.so")
-    }
 }
 
 dependencies {

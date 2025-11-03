@@ -4,18 +4,26 @@ import android.content.Context
 import android.os.SystemClock
 import android.util.Log
 import com.brill.zero.domain.model.Priority
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.util.Locale
-// ✅ MediaPipe Tasks API
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.text.textclassifier.TextClassifier
 import com.google.mediapipe.tasks.text.textclassifier.TextClassifierResult
-import com.google.mediapipe.tasks.components.containers.Category   // ✅ 新增
+import com.google.mediapipe.tasks.components.containers.Category
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class PriorityClassifier(private val context: Context) {
 
-    private val modelPath = "models/l1_gatekeeper_model.tflite"
+    private val modelAssetPath = "models/l1_gatekeeper_model.tflite"
+
+    init {
+        // 初始化时先尝试加载模型
+        CoroutineScope(Dispatchers.IO).launch {
+            Log.d("PriorityClassifier", "Initializing with model: $modelAssetPath")
+            preload()
+        }
+    }
 
     private val labelMap = mapOf(
         "高优先级" to Priority.HIGH,
@@ -23,68 +31,115 @@ class PriorityClassifier(private val context: Context) {
         "低优先级" to Priority.LOW
     )
 
-    private val textClassifier: TextClassifier by lazy {
-        Log.i("ZeroL1-MP", "正在加载 L1 (Gatekeeper) MediaPipe 模型...")
-        val startTime = SystemClock.elapsedRealtime()
-
-        val baseOptions = BaseOptions.builder()
-            .setModelAssetPath(modelPath)
-            .build()
-
-        val options = TextClassifier.TextClassifierOptions.builder()
-            .setBaseOptions(baseOptions)
-            .build()
-
-        TextClassifier.createFromOptions(context, options).also {
-            Log.i(
-                "ZeroL1-MP",
-                "L1 MediaPipe 模型加载完毕 (耗时: ${SystemClock.elapsedRealtime() - startTime}ms)"
-            )
+    // 仅构造一次，避免频繁加载 native
+    private val options by lazy {
+        try {
+            Log.d("PriorityClassifier", "Creating model options for: $modelAssetPath")
+            val base = BaseOptions.builder()
+                .setModelAssetPath(modelAssetPath)   // 直接用 assets
+                .build()
+            TextClassifier.TextClassifierOptions.builder()
+                .setBaseOptions(base)
+                .build()
+        } catch (e: Exception) {
+            Log.e("PriorityClassifier", "Failed to create model options: ${e.message}", e)
+            null
         }
     }
 
-    suspend fun predictPriority(fullText: String): Priority = withContext(Dispatchers.Default) {
+    @Volatile private var classifier: TextClassifier? = null
+    @Volatile private var modelAvailable = false
+
+    /** 可选：提前加载，放到 IO 线程 */
+    suspend fun preload() = withContext(Dispatchers.IO) {
+        try {
+            if (classifier == null && options != null) {
+                Log.d("PriorityClassifier", "Loading L1 model from assets: $modelAssetPath")
+                classifier = TextClassifier.createFromOptions(context, options!!)
+                modelAvailable = true
+                Log.d("PriorityClassifier", "L1 model loaded successfully")
+            } else if (options == null) {
+                Log.e("PriorityClassifier", "Model options are null - cannot load model")
+                modelAvailable = false
+            }
+        } catch (e: Exception) {
+            Log.e("PriorityClassifier", "Failed to load L1 model: ${e.message}", e)
+            modelAvailable = false
+        }
+    }
+
+    /** 预测（IO 线程执行，避免阻塞主线程） */
+    suspend fun predictPriority(fullText: String): Priority = withContext(Dispatchers.IO) {
         val start = SystemClock.elapsedRealtime()
 
-        if (fullText.isBlank()) {
-            Log.w("ZeroL1-MP", "空文本，降级为 LOW")
-            return@withContext Priority.LOW
+        // Ensure classifier is initialized
+        if (classifier == null && options != null) {
+            try {
+                classifier = TextClassifier.createFromOptions(context, options!!)
+                modelAvailable = true
+                Log.d("PriorityClassifier", "Model initialized successfully")
+            } catch (e: Exception) {
+                Log.e("PriorityClassifier", "Failed to initialize model: ${e.message}")
+                modelAvailable = false
+            }
         }
 
-        // 运行推理（异常保护）
-        val result: TextClassifierResult = runCatching { textClassifier.classify(fullText) }
-            .getOrElse { e ->
-                Log.e("ZeroL1-MP", "classify 失败：${e.message}", e)
-                return@withContext Priority.LOW
+        // Use ML model for classification
+        if (modelAvailable && classifier != null) {
+            try {
+                val result: TextClassifierResult = classifier!!.classify(fullText)
+
+                // Get the best classification result
+                val best: Category? = result
+                    .classificationResult()
+                    .classifications()
+                    .firstOrNull()
+                    ?.categories()
+                    ?.maxByOrNull { it.score() }
+
+                val categoryName = best?.categoryName()
+                val mapped = labelMap[categoryName] ?: Priority.LOW
+
+                Log.d(
+                    "ZeroL1-MP",
+                    "L1 预测: '${categoryName ?: "N/A"}' " +
+                            "(score=${"%.2f".format(best?.score() ?: 0f)}) -> $mapped " +
+                            "(${SystemClock.elapsedRealtime() - start}ms)"
+                )
+                return@withContext mapped
+            } catch (e: Exception) {
+                Log.e("PriorityClassifier", "Model classification failed: ${e.message}", e)
+                modelAvailable = false
+                // Continue to fallback
             }
+        }
 
-        // 0.10.x 正确取法：classificationResult → classifications → categories
-        val best: Category? = result
-            .classificationResult()
-            .classifications()
-            .firstOrNull()
-            ?.categories()
-            ?.maxByOrNull { it.score() }
-
-        val mapped = best?.let { labelMap[it.categoryName()] } ?: Priority.LOW
-
-        Log.d(
+        // Fallback to keyword-based classification only if model fails
+        val fallbackPriority = classifyByKeywords(fullText)
+        Log.w(
             "ZeroL1-MP",
-            String.format(
-                Locale.US,
-                "L1 预测: '%s' (score=%.3f) -> %s (耗时: %dms)",
-                best?.categoryName() ?: "N/A",
-                best?.score() ?: 0f,
-                mapped.name,
-                SystemClock.elapsedRealtime() - start
-            )
+            "L1 预测 (keyword fallback): $fallbackPriority " +
+                    "(${SystemClock.elapsedRealtime() - start}ms) - Model unavailable"
         )
-
-        return@withContext mapped
-    }
-    suspend fun preload() = withContext(kotlinx.coroutines.Dispatchers.Default) {
-        // 触发 lazy 初始化即可
-        textClassifier.hashCode()
+        return@withContext fallbackPriority
     }
 
+    /** Keyword-based fallback classification */
+    private val keywordPatterns =  mapOf(
+        "高优先级" to Priority.HIGH,
+        "中优先级" to Priority.MEDIUM,
+        "低优先级" to Priority.LOW
+    )
+
+    private fun classifyByKeywords(text: String): Priority {
+        val lowerText = text.lowercase()
+        
+        // Count keyword matches for each priority level
+        val scores = keywordPatterns.mapValues { (_, keywords) ->
+            keywords.count { keyword -> lowerText.contains(keyword) }
+        }
+        
+        // Return priority with highest score, default to LOW
+        return scores.maxByOrNull { it.value }?.key ?: Priority.LOW
+    }
 }

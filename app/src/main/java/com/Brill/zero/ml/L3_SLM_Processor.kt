@@ -44,11 +44,20 @@ class L3_SLM_Processor(private val context: Context) {
         val dir = File(context.noBackupFilesDir, "models").apply { mkdirs() }
         val dst = File(dir, File(assetModelPath).name)
         if (!dst.exists()) {
-            context.assets.open(assetModelPath).use { `in` ->
-                FileOutputStream(dst).use { out ->
-                    `in`.copyTo(out)
+            Log.d("ZeroL3-SLM", "Copying L3 model from assets: $assetModelPath")
+            try {
+                context.assets.open(assetModelPath).use { `in` ->
+                    FileOutputStream(dst).use { out ->
+                        `in`.copyTo(out)
+                    }
                 }
+                Log.d("ZeroL3-SLM", "L3 model copied successfully to: ${dst.absolutePath}")
+            } catch (e: Exception) {
+                Log.e("ZeroL3-SLM", "Failed to copy L3 model: ${e.message}", e)
+                throw e
             }
+        } else {
+            Log.d("ZeroL3-SLM", "L3 model already exists at: ${dst.absolutePath}")
         }
         return dst.absolutePath
     }

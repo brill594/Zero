@@ -30,18 +30,25 @@ class NlpProcessor(context: Context) {
 
     // L2 模型加载（MediaPipe）
     private val intentClassifier: TextClassifier by lazy {
-        Log.i("ZeroL2-MP", "正在加载 L2 (MobileBERT) MediaPipe 模型...")
+        Log.i("ZeroL2-MP", "正在加载 L2 (MobileBERT) MediaPipe 模型 from: $modelPath")
 
-        val baseOptions = BaseOptions.builder()
-            .setModelAssetPath(modelPath)
-            // .setNumThreads(4) // 个别版本无该方法，先省略保持兼容
-            .build()
+        try {
+            val baseOptions = BaseOptions.builder()
+                .setModelAssetPath(modelPath)
+                // .setNumThreads(4) // 个别版本无该方法，先省略保持兼容
+                .build()
 
-        val options = TextClassifier.TextClassifierOptions.builder()
-            .setBaseOptions(baseOptions)
-            .build()
+            val options = TextClassifier.TextClassifierOptions.builder()
+                .setBaseOptions(baseOptions)
+                .build()
 
-        TextClassifier.createFromOptions(context, options)
+            val classifier = TextClassifier.createFromOptions(context, options)
+            Log.i("ZeroL2-MP", "L2 模型加载成功")
+            classifier
+        } catch (e: Exception) {
+            Log.e("ZeroL2-MP", "L2 模型加载失败: ${e.message}", e)
+            throw e // 重新抛出异常，让调用者知道模型加载失败
+        }
     }
 
     /** 核心分流 */
