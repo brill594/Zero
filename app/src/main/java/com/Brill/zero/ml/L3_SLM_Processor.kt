@@ -24,13 +24,13 @@ class L3_SLM_Processor(private val context: Context) {
                 .trim() // 去掉文件首尾空白/换行，避免意外解析问题
         }.getOrNull()
     }
-    // —— V13 / V36 System Prompt（含“多个时间取最终确认项”规则）——
+    // —— 强化版 System Prompt：只输出一个纯 JSON 对象 ——
     private val SYSTEM_PROMPT = """
-        你是一个AI助手。请从通知中提取'意图','摘要','截止时间'，并以JSON格式返回。
-        【JSON 键名】键必须为 "intent", "summary", "deadline"。
-        【任务 1: 'intent'】从["财务变动","工作沟通","物流信息","验证码","系统通知","未接来电","日程提醒","社交闲聊"]精确选一，并以正文为准。
-        【任务 2: 'summary'】5~15字、以动词开头、不得直接拷贝原文。
-        【任务 3: 'deadline'】从文本中提取时间；若有多个冲突时间，优先使用最终确认的时间；若无则为 null。
+        只输出一个 JSON 对象，不得输出任何其他文字或标记（禁止解释、代码块、换行前缀）。
+        键名必须为 "intent", "summary", "deadline"，且仅包含这三个键。
+        intent：从 ["财务变动","工作沟通","物流信息","验证码","系统通知","未接来电","日程提醒","社交闲聊"] 精确选一；以正文为准。
+        summary：5~15 字，动词开头，避免直接原文复述。
+        deadline：从文本中提取时间；若出现多个候选，以最终确认时间为准；缺失则为 null。
     """.trimIndent()
 
     // GGUF 模型相对 assets 路径（随 APK 的“种子模型”）
@@ -67,7 +67,7 @@ class L3_SLM_Processor(private val context: Context) {
                 "<|im_start|>user\n$userText<|im_end|>\n" +
                 "<|im_start|>assistant\n"
 
-    private fun tryRunViaJNI(prompt: String, maxNewTokens: Int = 160): String? {
+    private fun tryRunViaJNI(prompt: String, maxNewTokens: Int = 48): String? {
         return try {
             // 通过反射调用：com.Brill.zero.llama.Llama（若未集成会抛异常→ fallback）
             val clazz = Class.forName("com.brill.zero.llama.Llama")
@@ -84,24 +84,56 @@ class L3_SLM_Processor(private val context: Context) {
 
             val modelPath = ensureLocalModelPath()
             val threads = Runtime.getRuntime().availableProcessors().coerceAtMost(8)
-
-            val handle = mInit.invoke(null, modelPath, 4096, 0, threads) as Long
+            // 缩小上下文窗口以提升推理速度（提示词约 200 tokens 足够）
+            val handle = mInit.invoke(null, modelPath, 2048, 0, threads) as Long
+            // 启用 GBNF 语法：强约束仅输出一个 JSON 对象
+            val g = grammarText
+            Log.d("ZeroL3-SLM", "JNI 调用：启用语法=${g != null}, maxNewTokens=$maxNewTokens")
             val out = mCompletion.invoke(
                 null,
                 handle,
                 prompt,
-                grammarText,                 // ← 传 GBNF 文本（可能为 null；JNI 端自己判断）
+                g,                           // ← 传入语法文本；为 null 时原生自动关闭语法采样
                 maxNewTokens,
-                0f,
-                1.0f,
+                0f,                          // temperature（0 表示贪婪）
+                1.0f,                        // top-p（1 表示禁用）
                 42
             ) as String
 
             mFree.invoke(null, handle)
-            out
+            val cleaned = out.trim()
+            if (cleaned.isEmpty()) {
+                Log.w("ZeroL3-SLM", "JNI 返回空字符串")
+                null
+            } else {
+                Log.d("ZeroL3-SLM", "JNI 输出片段='${cleaned.take(160)}'")
+                cleaned
+            }
         } catch (t: Throwable) {
             Log.w("ZeroL3-SLM", "JNI 不可用，使用 Stub：${t.message}")
             null
+        }
+    }
+
+    // 为避免 nativeCompletion 长时间阻塞，增加软超时包装。
+    private fun tryRunViaJNIWithTimeout(prompt: String, timeoutMs: Long = 900000): String? {
+        val exec = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+            Thread(r, "L3JNI").apply { isDaemon = true }
+        }
+        return try {
+            val future = exec.submit<String?> {
+                // 使用较小的生成长度以加速返回；配合 native 看到 '}' 即提前停止
+                tryRunViaJNI(prompt, maxNewTokens = 24)
+            }
+            future.get(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+        } catch (e: java.util.concurrent.TimeoutException) {
+            android.util.Log.w("ZeroL3-SLM", "JNI 推理超时 ${timeoutMs}ms，使用 Stub")
+            null
+        } catch (t: Throwable) {
+            android.util.Log.w("ZeroL3-SLM", "JNI 调用异常：${t.message}")
+            null
+        } finally {
+            exec.shutdownNow()
         }
     }
 
@@ -114,16 +146,26 @@ class L3_SLM_Processor(private val context: Context) {
         Log.i("ZeroL3-SLM", "L3-B 调用：intent='$l2_intent'")
         val finalPrompt = buildChatMLPrompt(text)
 
-        // A) JNI 真推理（如可用）
-        val rawOutput = tryRunViaJNI(finalPrompt)
-        // B) Fallback Stub（保底产出，便于端到端打通）
-            ?: """
-                {"intent":"$l2_intent","summary":"${guessSummary(text)}","deadline":${guessDeadlineText(text)}}
-            """.trimIndent()
+        // A) JNI 真推理（如可用，带软超时）
+        val rawOutput = tryRunViaJNIWithTimeout(finalPrompt)
 
-        // 解析 JSON
+        // 解析 JSON（若失败则回退 Stub）
         return try {
-            val cleanJson = extractJson(rawOutput) ?: return null
+            val cleanJson = rawOutput?.let { extractJson(it) } ?: run {
+                if (rawOutput == null) {
+                    Log.w("ZeroL3-SLM", "JNI 返回为空或失败，使用 Stub")
+                } else {
+                    Log.w(
+                        "ZeroL3-SLM",
+                        "L3 输出非 JSON，使用 Stub；原始片段='${rawOutput.take(120)}'"
+                    )
+                }
+                // 使用 JSONObject.quote 可靠转义，避免 summary 中出现双引号导致 JSON 解析失败
+                val fallbackJson = """
+                {"intent":${JSONObject.quote(l2_intent)},"summary":${JSONObject.quote(guessSummary(text))},"deadline":${guessDeadlineText(text)}}
+                """.trimIndent()
+                fallbackJson
+            }
             val obj = JSONObject(cleanJson)
 
             val l3Intent = obj.optString("intent", l2_intent)

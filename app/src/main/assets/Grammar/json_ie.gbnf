@@ -1,11 +1,10 @@
 root    ::= ws object ws
-object  ::= "{" ws "\"intent\"" ws ":" ws intent ws "," ws "\"summary\"" ws ":" ws string_short ws "," ws "\"deadline\"" ws ":" ws (string | "null") ws "}"
+object  ::= "{" ws "\"intent\"" ws ":" ws intent ws "," ws "\"summary\"" ws ":" ws string-short ws "," ws "\"deadline\"" ws ":" ws (string | "null") ws "}"
 intent  ::= "\"财务变动\"" | "\"工作沟通\"" | "\"物流信息\"" | "\"验证码\"" | "\"系统通知\"" | "\"未接来电\"" | "\"日程提醒\"" | "\"社交闲聊\""
-# 5~15 个字符的“近似”约束（无法严格限定“动词开头”，但能逼长度）
-string_short ::= "\"" ch ch ch ch ch ch_opt ch_opt ch_opt ch_opt ch_opt ch_opt ch_opt ch_opt ch_opt ch_opt "\""
-ch_opt  ::= ch | ε
-string  ::= "\"" ch* "\""
-ch      ::= [^"\\] | "\\" esc
+# 5~15 个字符的长度约束，使用量词表达（GBNF 支持 {m,n}）
+string-short ::= "\"" ch{5,15} "\""
+string  ::= "\"" ch{1,32} "\""
+ch      ::= [^"\\\n\r] | "\\" esc
 esc     ::= ["\\/bfnrt] | "u" hex hex hex hex
 hex     ::= [0-9a-fA-F]
-ws      ::= [ \t\n\r]*
+ws      ::= [ \t\n\r]{0,8}

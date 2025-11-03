@@ -12,7 +12,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.Brill.zero"
+        applicationId = "com.brill.zero"
         minSdk = 33
         targetSdk = 36
         versionCode = 1
