@@ -35,11 +35,28 @@
 #endif
 
 // llama.cpp 与 ggml 头文件（IDE 未识别 includePath 时，加兜底路径）
-#if __has_include("llama.h") && __has_include("ggml.h")
-#  include "ggml.h"   // 先行包含，便于 IDE 解析 llama.h 内部依赖
-#  include "llama.h"
-#elif __has_include("../../../../third_party/llama.cpp/include/llama.h") && __has_include("../../../../third_party/llama.cpp/ggml/include/ggml.h")
+// 先引入 ggml 基础头，再引入 llama 顶层头，确保 IDE 能解析到 ggml-cpu.h
+#if __has_include("ggml.h")
+#  include "ggml.h"
+#elif __has_include("../../../../third_party/llama.cpp/ggml/include/ggml.h")
 #  include "../../../../third_party/llama.cpp/ggml/include/ggml.h"
+#endif
+
+#if __has_include("ggml-backend.h")
+#  include "ggml-backend.h"
+#elif __has_include("../../../../third_party/llama.cpp/ggml/include/ggml-backend.h")
+#  include "../../../../third_party/llama.cpp/ggml/include/ggml-backend.h"
+#endif
+
+// 强制供应商路径，帮助 IDE 解析 ggml-cpu.h（正常构建会走 CMake include 路径）
+#include "../../../../third_party/llama.cpp/ggml/include/ggml-cpu.h"
+#if __has_include("ggml-cpu.h")
+#  include "ggml-cpu.h"
+#endif
+
+#if __has_include("llama.h")
+#  include "llama.h"
+#elif __has_include("../../../../third_party/llama.cpp/include/llama.h")
 #  include "../../../../third_party/llama.cpp/include/llama.h"
 #else
    // 仅用于静态分析兜底的前置声明；真实构建使用上面的头文件
@@ -113,7 +130,7 @@ static inline void batch_clear_tokens(llama_batch& batch) { batch.n_tokens = 0; 
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_brill_zero_llama_Llama_nativeInit(
         JNIEnv* env, jobject /*thiz*/,
-        jstring jModelPath, jint nCtx, jint /*nGpuLayers*/, jint nThreads) {
+        jstring jModelPath, jint nCtx, jint nGpuLayers, jint nThreads) {
 
     const char* cpath = env->GetStringUTFChars(jModelPath, nullptr);
     std::string model_path = cpath ? cpath : "";
@@ -121,13 +138,51 @@ Java_com_brill_zero_llama_Llama_nativeInit(
 
     llama_backend_init();
 
+    // 设备探测：如无 GPU/IGPU 设备，禁用 GPU 卸载以避免后端空指针
+    size_t dev_count = ggml_backend_dev_count();
+    int gpu_like = 0;
+    for (size_t i = 0; i < dev_count; ++i) {
+        ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+        const auto type = ggml_backend_dev_type(dev);
+        if (type == GGML_BACKEND_DEVICE_TYPE_GPU || type == GGML_BACKEND_DEVICE_TYPE_IGPU) {
+            gpu_like++;
+        }
+    }
+
     llama_model_params mparams = llama_model_default_params();
     mparams.use_mmap  = true;
     mparams.use_mlock = false;
+    // 显式覆盖 GPU 层数（包括 0，避免默认 999 触发大量卸载）
+    mparams.n_gpu_layers = nGpuLayers;
+    // 当不卸载至 GPU 时，关闭多设备拆分，保持 CPU-only 更稳
+    if (mparams.n_gpu_layers == 0) {
+        mparams.split_mode = LLAMA_SPLIT_MODE_NONE;
+        mparams.use_extra_bufts = false; // 保守：禁用重量重打包，避免误触发设备缓冲
+    }
+    // 当 CPU-only 时，限制设备列表为仅 CPU，避免 Vulkan 后端初始化与调度参与
+    ggml_backend_dev_t cpu_dev = ggml_backend_dev_by_type(GGML_BACKEND_DEVICE_TYPE_CPU);
+    ggml_backend_dev_t devices_cpu_only[2] = { cpu_dev, nullptr };
+    if (mparams.n_gpu_layers == 0 || gpu_like == 0) {
+        mparams.devices    = devices_cpu_only;
+        mparams.main_gpu   = 0;
+        mparams.tensor_split = nullptr;
+    }
+    // 若未检测到 GPU/IGPU 设备，强制 CPU 模式
+    if (gpu_like == 0 && mparams.n_gpu_layers > 0) {
+        LOGE("no GPU devices detected: forcing n_gpu_layers=0 (was %d)", (int)mparams.n_gpu_layers);
+        mparams.n_gpu_layers = 0;
+        mparams.split_mode = LLAMA_SPLIT_MODE_NONE;
+        mparams.use_extra_bufts = false;
+        mparams.devices    = devices_cpu_only;
+    }
 
     llama_context_params cparams = llama_context_default_params();
     cparams.n_ctx     = (nCtx > 0 ? nCtx : 4096);
     cparams.n_threads = (nThreads > 0 ? nThreads : 4);
+    // 为提示词批处理也设置线程数（默认可能与 n_threads 不同，显式统一）
+    cparams.n_threads_batch = cparams.n_threads;
+    // 保守：禁用 KQV 卸载，先验证稳定性（后续再按需开启）
+    cparams.offload_kqv = false;
 
     auto* st = new LlamaState();
     st->n_ctx     = cparams.n_ctx;
@@ -140,10 +195,14 @@ Java_com_brill_zero_llama_Llama_nativeInit(
     st->ctx = llama_init_from_model(st->model, cparams);
     if (!st->ctx)   { LOGE("init_from_model failed"); llama_model_free(st->model); delete st; return 0; }
 
+    // 显式设置生成与批处理线程数，确保运行时一致
+    llama_set_n_threads(st->ctx, st->n_threads, st->n_threads);
+
     st->vocab = llama_model_get_vocab(st->model);
     if (!st->vocab) { LOGE("get_vocab failed"); llama_free(st->ctx); llama_model_free(st->model); delete st; return 0; }
 
-    LOGI("llama init ok: n_ctx=%d, threads=%d", st->n_ctx, st->n_threads);
+    LOGI("llama init ok: n_ctx=%d, threads=%d, threads_batch=%d, n_gpu_layers=%d, devices_total=%zu, gpu_like=%d",
+         st->n_ctx, st->n_threads, llama_n_threads_batch(st->ctx), mparams.n_gpu_layers, dev_count, gpu_like);
     return reinterpret_cast<jlong>(st);
 }
 
@@ -212,6 +271,7 @@ Java_com_brill_zero_llama_Llama_nativeCompletion(
     llama_sampler_chain_add(chain, llama_sampler_init_greedy());
 
     // 3) 生成循环（采样链 + 语法约束）
+    const int64_t t_start_us = llama_time_us();
     std::string out;
     out.reserve(std::max(64, maxTokens * 4));
 
@@ -219,6 +279,7 @@ Java_com_brill_zero_llama_Llama_nativeCompletion(
     const int n_vocab = llama_n_vocab(st->vocab);              // 或者 llama_vocab_n_tokens(st->vocab)
     bool saw_open_brace = false;  // 见到 '{' 后再等待 '}' 提前收敛
 
+    int gen_tokens = 0;
     for (int i = 0; i < maxTokens; ++i) {
         // 采样链基于最后一个 token 的 logits 采样
         const llama_token tok = llama_sampler_sample(chain, st->ctx, /*idx*/-1);
@@ -257,14 +318,19 @@ Java_com_brill_zero_llama_Llama_nativeCompletion(
             break;
         }
         n_past++;
+        gen_tokens = i + 1;
     }
 
     // 释放采样器链
     llama_sampler_free(chain);
     llama_batch_free(batch);
     {
+        const int64_t t_end_us = llama_time_us();
+        const double elapsed_ms = (t_end_us - t_start_us) / 1000.0;
+        const double tps = elapsed_ms > 0.0 ? (gen_tokens * 1000.0 / elapsed_ms) : 0.0;
         std::string frag = out.size() > 64 ? out.substr(0, 64) : out;
-        LOGI("nativeCompletion return len=%d, frag='%s'", (int)out.size(), frag.c_str());
+        LOGI("nativeCompletion gen=%d tokens in %.1f ms (%.2f tok/s), frag='%s'",
+             gen_tokens, elapsed_ms, tps, frag.c_str());
     }
     return env->NewStringUTF(out.c_str());
 }

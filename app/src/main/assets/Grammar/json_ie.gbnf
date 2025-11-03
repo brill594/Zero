@@ -1,5 +1,5 @@
 root    ::= ws object ws
-object  ::= "{" ws "\"intent\"" ws ":" ws intent ws "," ws "\"summary\"" ws ":" ws string-short ws "," ws "\"deadline\"" ws ":" ws (string | "null") ws "}"
+object  ::= "{" ws "\"intent\"" ws ":" ws intent ws "," ws "\"summary\"" ws ":" ws string-short ws "," ws "\"due_time\"" ws ":" ws (string | "null") ws "}"
 intent  ::= "\"财务变动\"" | "\"工作沟通\"" | "\"物流信息\"" | "\"验证码\"" | "\"系统通知\"" | "\"未接来电\"" | "\"日程提醒\"" | "\"社交闲聊\""
 # 5~15 个字符的长度约束，使用量词表达（GBNF 支持 {m,n}）
 string-short ::= "\"" ch{5,15} "\""

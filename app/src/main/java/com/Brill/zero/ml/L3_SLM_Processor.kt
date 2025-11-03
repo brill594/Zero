@@ -26,15 +26,56 @@ class L3_SLM_Processor(private val context: Context) {
     }
     // —— 强化版 System Prompt：只输出一个纯 JSON 对象 ——
     private val SYSTEM_PROMPT = """
-        只输出一个 JSON 对象，不得输出任何其他文字或标记（禁止解释、代码块、换行前缀）。
-        键名必须为 "intent", "summary", "deadline"，且仅包含这三个键。
-        intent：从 ["财务变动","工作沟通","物流信息","验证码","系统通知","未接来电","日程提醒","社交闲聊"] 精确选一；以正文为准。
-        summary：5~15 字，动词开头，避免直接原文复述。
-        deadline：从文本中提取时间；若出现多个候选，以最终确认时间为准；缺失则为 null。
+<|im_start|>system
+你是一个AI助手。请从通知中提取'意图','摘要','截止时间'，并以JSON格式返回。
+
+【JSON 键名】
+键必须为 "intent", "summary", "due_time"。
+
+【任务 1: 'intent' (意图)】
+值【必须】从以下 8 个字符串中精确选择一个：
+["财务变动", "工作沟通", "物流信息", "验证码", "系统通知", "未接来电", "日程提醒", "社交闲聊"]
+* 意图判断【必须】基于通知的【正文内容】，而不是【前缀】。
+
+【任务 2: 'summary' (摘要)】
+* 【规则】: 摘要必须是一个【简洁的行动项】，长度在 5 到 15 个字之间。
+* 【规则】: 摘要应以一个“动作”(动词)开头 (例如: "取...", "回拨...", "给...")。
+* 【严禁】: 严禁将原始 'text' 不经修改地复制到 'summary' 中。
+* 示例 (工作): "给老板发PRD"
+* 示例 (财务): "工资到账 22,500.00元"
+* 示例 (验证码): "抖音验证码: 123456"
+
+【任务 3: 'due_time' (截止时间)】
+* 【必须】从 'text' 中提取时间。
+* [!!!] 【V13 规则】: 如果文本中包含多个时间 (如 "原定明天，改到今天下午"), 【必须】优先提取【最终被确认】的时间 (即 "今天下午")。
+* 如果 'text' 中【没有】时间，'due_time' 必须为 null。
+<|im_end|>
+<|im_start|>user
+{USER_NOTIFICATION_TEXT_HERE}<|im_end|>
+<|im_start|>assistant
     """.trimIndent()
 
     // GGUF 模型相对 assets 路径（随 APK 的“种子模型”）
     private val assetModelPath = "models/l3_processor_model.Q5_K_M.gguf"
+
+    @Volatile
+    private var threadsOverride: Int? = null
+    @Volatile
+    private var gpuLayersOverride: Int? = null
+
+    /**
+     * 允许从 UI 覆盖 SLM 的线程数（1..availableProcessors，上限按 8 取）
+     */
+    fun setThreadsOverride(value: Int?) {
+        threadsOverride = value?.coerceAtLeast(1)?.coerceAtMost(Runtime.getRuntime().availableProcessors())
+    }
+
+    /**
+     * 允许从 UI 覆盖 GPU 卸载层数（0 表示禁用卸载；建议在 0..32 之间）
+     */
+    fun setGpuLayersOverride(value: Int?) {
+        gpuLayersOverride = value?.coerceAtLeast(0)?.coerceAtMost(64)
+    }
 
     // ————————————————————————————————————————————————————————————
     // 1) 推理：JNI（若可用）→ 否则 Stub
@@ -83,12 +124,16 @@ class L3_SLM_Processor(private val context: Context) {
             val mFree = clazz.getMethod("nativeFree", java.lang.Long.TYPE)
 
             val modelPath = ensureLocalModelPath()
-            val threads = Runtime.getRuntime().availableProcessors().coerceAtMost(8)
+            val defaultThreads = Runtime.getRuntime().availableProcessors().coerceAtMost(8)
+            val threads = (threadsOverride ?: defaultThreads).coerceAtMost(8)
             // 缩小上下文窗口以提升推理速度（提示词约 200 tokens 足够）
-            val handle = mInit.invoke(null, modelPath, 2048, 0, threads) as Long
+            // Vulkan/其他 GPU 后端可用时，传递非零 nGpuLayers 以尽可能将层卸载到 GPU
+            // 默认保守：0（CPU-only）；UI 可通过 setGpuLayersOverride(value) 打开 GPU 卸载
+            val nGpuLayers = (gpuLayersOverride ?: 0)
+            val handle = mInit.invoke(null, modelPath, 2048, nGpuLayers, threads) as Long
             // 启用 GBNF 语法：强约束仅输出一个 JSON 对象
             val g = grammarText
-            Log.d("ZeroL3-SLM", "JNI 调用：启用语法=${g != null}, maxNewTokens=$maxNewTokens")
+            Log.d("ZeroL3-SLM", "JNI 调用：启用语法=${g != null}, maxNewTokens=$maxNewTokens, threads=$threads (override=${threadsOverride}), nGpuLayers=$nGpuLayers (override=${gpuLayersOverride})")
             val out = mCompletion.invoke(
                 null,
                 handle,
@@ -123,7 +168,7 @@ class L3_SLM_Processor(private val context: Context) {
         return try {
             val future = exec.submit<String?> {
                 // 使用较小的生成长度以加速返回；配合 native 看到 '}' 即提前停止
-                tryRunViaJNI(prompt, maxNewTokens = 24)
+                tryRunViaJNI(prompt, maxNewTokens = 48)
             }
             future.get(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
         } catch (e: java.util.concurrent.TimeoutException) {
@@ -162,7 +207,7 @@ class L3_SLM_Processor(private val context: Context) {
                 }
                 // 使用 JSONObject.quote 可靠转义，避免 summary 中出现双引号导致 JSON 解析失败
                 val fallbackJson = """
-                {"intent":${JSONObject.quote(l2_intent)},"summary":${JSONObject.quote(guessSummary(text))},"deadline":${guessDeadlineText(text)}}
+                {"intent":${JSONObject.quote(l2_intent)},"summary":${JSONObject.quote(guessSummary(text))},"due_time":${guessDeadlineText(text)}}
                 """.trimIndent()
                 fallbackJson
             }
@@ -174,10 +219,10 @@ class L3_SLM_Processor(private val context: Context) {
             }
 
             val summary = obj.optString("summary", guessSummary(text))
-            val deadlineText = obj.opt("deadline")?.toString()?.takeIf { it != "null" }
+            val deadlineText = obj.opt("due_time")?.toString()?.takeIf { it != "null" }
             val dueAt = parseDeadlineToEpochMillis(deadlineText)
 
-            Log.i("ZeroL3-SLM", "L3 结果：summary='$summary' deadline='$deadlineText' → $dueAt")
+            Log.i("ZeroL3-SLM", "L3 结果：summary='$summary' due_time='$deadlineText' → $dueAt")
             Todo(title = summary, dueAt = dueAt)
         } catch (e: Exception) {
             Log.e("ZeroL3-SLM", "JSON 解析失败: ${e.message}")

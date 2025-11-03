@@ -30,6 +30,15 @@ fun DebugScreen() {
     val nlp = remember { NlpProcessor(ctx) }
     val slm = remember { nlp.l3SlmProcessor }
 
+    // 线程选择（默认使用设备可用核心数的上限 8）
+    val cores = remember { Runtime.getRuntime().availableProcessors() }
+    var threads by remember { mutableStateOf(cores.coerceAtMost(8)) }
+    LaunchedEffect(threads) { slm.setThreadsOverride(threads) }
+
+    // GPU 卸载层数（0 表示禁用 GPU）
+    var gpuLayers by remember { mutableStateOf(0) }
+    LaunchedEffect(gpuLayers) { slm.setGpuLayersOverride(gpuLayers) }
+
     var input by remember { mutableStateOf("测试：明早9点和王总对齐下财务周报，下午取快递 取件码A8B3。") }
 
     var l1Out by remember { mutableStateOf<Priority?>(null) }
@@ -120,6 +129,10 @@ fun DebugScreen() {
             }
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ThreadsDropdown(selected = threads, max = cores.coerceAtMost(8), onSelect = { threads = it }, modifier = Modifier.weight(1f))
+                GpuLayersDropdown(selected = gpuLayers, options = listOf(0, 4, 8, 16, 24, 32), onSelect = { gpuLayers = it }, modifier = Modifier.weight(1f))
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 IntentDropdown(l3Intents, l3Intent, onSelect = { l3Intent = it }, modifier = Modifier.weight(1f))
                 Button(onClick = {
                     scope.launch {
@@ -197,6 +210,93 @@ private fun IntentDropdown(
             options.forEach { opt ->
                 DropdownMenuItem(
                     text = { Text(opt) },
+                    onClick = {
+                        onSelect(opt)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ThreadsDropdown(
+    selected: Int,
+    max: Int,
+    onSelect: (Int) -> Unit,
+    label: String = "线程数",
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val options = remember(max) { (1..max).toList() }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = selected.toString(),
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor()
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            options.forEach { opt ->
+                DropdownMenuItem(
+                    text = { Text(opt.toString()) },
+                    onClick = {
+                        onSelect(opt)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GpuLayersDropdown(
+    selected: Int,
+    options: List<Int>,
+    onSelect: (Int) -> Unit,
+    label: String = "GPU 卸载层数",
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = selected.toString(),
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor()
+        )
+
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            options.forEach { opt ->
+                DropdownMenuItem(
+                    text = { Text(opt.toString()) },
                     onClick = {
                         onSelect(opt)
                         expanded = false

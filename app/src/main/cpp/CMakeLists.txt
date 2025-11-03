@@ -18,7 +18,7 @@ endif()
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
 set(GGML_NATIVE  OFF CACHE BOOL "" FORCE)
 set(GGML_CPU_ARM64 ON CACHE BOOL "" FORCE)
-set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
+set(GGML_VULKAN ON CACHE BOOL "" FORCE)
 set(GGML_CUDA   OFF CACHE BOOL "" FORCE)
 set(GGML_METAL  OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
@@ -37,6 +37,7 @@ add_library(llamajni SHARED
 target_include_directories(llamajni BEFORE PRIVATE
         ${LLAMA_DIR}/include
         ${LLAMA_DIR}/ggml/include
+        ${LLAMA_DIR}/ggml/src
         # 如需 grammar（llama-grammar.h），再加：
         # ${LLAMA_DIR}/src
 )
