@@ -16,8 +16,12 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material.icons.outlined.Label
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextAlign
+import com.brill.zero.data.datasets.L1DatasetLogger
+import com.brill.zero.domain.model.Priority
+import kotlinx.coroutines.launch
 
 private fun labelOf(n: com.brill.zero.data.db.NotificationEntity): String {
     return n.title?.takeIf { it.isNotBlank() }
@@ -77,6 +81,8 @@ fun HistoryScreen(onOpenDashboard: () -> Unit = {}) {
 @Composable
 private fun NotificationRow(n: com.brill.zero.data.db.NotificationEntity) {
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val repo = remember { ZeroRepository.get(ctx) }
     val pm = ctx.packageManager
     val iconBitmap = remember(n.pkg) {
         runCatching { pm.getApplicationIcon(n.pkg).toBitmap(64, 64) }.getOrNull()
@@ -84,6 +90,7 @@ private fun NotificationRow(n: com.brill.zero.data.db.NotificationEntity) {
     val appName = remember(n.pkg) {
         runCatching { pm.getApplicationLabel(pm.getApplicationInfo(n.pkg, 0)).toString() }.getOrNull() ?: n.pkg
     }
+    var menuOpen by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         if (iconBitmap != null) {
             Image(bitmap = iconBitmap.asImageBitmap(), contentDescription = appName, modifier = Modifier.size(64.dp))
@@ -98,6 +105,38 @@ private fun NotificationRow(n: com.brill.zero.data.db.NotificationEntity) {
             val infoLine = n.text?.takeIf { it.isNotBlank() } ?: "(无内容)"
             // 内容（content）字体比主题更大、可读性更好
             Text(infoLine, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
+        // 右侧：标注按钮 + 下拉菜单
+        Box {
+            IconButton(onClick = { menuOpen = true }) {
+                Icon(Icons.Outlined.Label, contentDescription = "标注优先级")
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(text = { Text("高优先级") }, onClick = {
+                    menuOpen = false
+                    val full = listOfNotNull(n.title, n.text).joinToString(" : ")
+                    scope.launch {
+                        repo.setNotificationUserPriority(n.id, Priority.HIGH.name)
+                        L1DatasetLogger.append(ctx, full.ifBlank { "(无内容)" }, "高优先级")
+                    }
+                })
+                DropdownMenuItem(text = { Text("中优先级") }, onClick = {
+                    menuOpen = false
+                    val full = listOfNotNull(n.title, n.text).joinToString(" : ")
+                    scope.launch {
+                        repo.setNotificationUserPriority(n.id, Priority.MEDIUM.name)
+                        L1DatasetLogger.append(ctx, full.ifBlank { "(无内容)" }, "中优先级")
+                    }
+                })
+                DropdownMenuItem(text = { Text("低优先级") }, onClick = {
+                    menuOpen = false
+                    val full = listOfNotNull(n.title, n.text).joinToString(" : ")
+                    scope.launch {
+                        repo.setNotificationUserPriority(n.id, Priority.LOW.name)
+                        L1DatasetLogger.append(ctx, full.ifBlank { "(无内容)" }, "低优先级")
+                    }
+                })
+            }
         }
     }
 }

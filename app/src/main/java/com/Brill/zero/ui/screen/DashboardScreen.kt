@@ -17,7 +17,8 @@ import android.graphics.Typeface
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -78,9 +79,15 @@ fun DashboardScreen(onNavigate: (String) -> Unit = {}) {
             )
             EntryBar(
                 text = "Debug",
-                icon = { Icon(Icons.Outlined.Build, contentDescription = null, tint = Color(0xFFE6E6E6), modifier = Modifier.size(32.dp)) },
+                icon = { Icon(Icons.Outlined.BugReport, contentDescription = null, tint = Color(0xFFE6E6E6), modifier = Modifier.size(32.dp)) },
                 fontFamily = vt323,
                 onClick = { onNavigate("debug") }
+            )
+            EntryBar(
+                text = "设置",
+                icon = { Icon(Icons.Outlined.Settings, contentDescription = null, tint = Color(0xFFE6E6E6), modifier = Modifier.size(32.dp)) },
+                fontFamily = vt323,
+                onClick = { onNavigate("settings") }
             )
         }
 

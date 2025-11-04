@@ -16,6 +16,7 @@ import com.brill.zero.ml.NlpProcessor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.brill.zero.domain.model.Priority
+import com.brill.zero.settings.AppSettings
 
 class L2L3ProcessWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
 
@@ -44,7 +45,8 @@ class L2L3ProcessWorker(appContext: Context, params: WorkerParameters) : Corouti
             val level = battIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
             val scale = battIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
             val pct = if (level >= 0 && scale > 0) (level * 100) / scale else -1
-            val notLow = pct == -1 || pct >= 15 // 与 WorkManager 的“电量不低”阈值保持接近
+            val threshold = AppSettings.getBatteryThreshold(applicationContext)
+            val notLow = pct == -1 || pct >= threshold
             val powerOk = charging || notLow
             if (!powerOk) {
                 Log.i("ZeroWorker", "电量偏低且未充电，延后处理 MEDIUM 任务（将重试）")
@@ -81,8 +83,11 @@ class L2L3ProcessWorker(appContext: Context, params: WorkerParameters) : Corouti
                 repo.markProcessed(listOf(n.id))
             }
             is L2ProcessResult.RequiresL3Slm -> {          // ✅ 新名字
-                // 自动处理时强制使用单线程
-                stage2Processor.l3SlmProcessor.setThreadsOverride(1)
+                // 使用设置页面中的线程数
+                runCatching {
+                    val threads = AppSettings.getL3Threads(applicationContext)
+                    stage2Processor.l3SlmProcessor.setThreadsOverride(threads)
+                }
                 val t = stage2Processor.l3SlmProcessor     // ✅ 新名字
                     .process(full, res.intent)
                 if (t != null) {

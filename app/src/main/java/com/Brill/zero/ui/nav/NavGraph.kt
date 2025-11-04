@@ -13,6 +13,8 @@ import androidx.navigation.compose.rememberNavController
 import com.brill.zero.ui.screen.DashboardScreen
 import com.brill.zero.ui.screen.TodoScreen
 import com.brill.zero.ui.screen.HistoryScreen
+import com.brill.zero.ui.screen.SettingsScreen
+import com.brill.zero.ui.screen.DatasetManageScreen
 import com.brill.zero.BuildConfig
 import com.brill.zero.debug.DebugScreen
 import androidx.compose.animation.slideInHorizontally
@@ -80,6 +82,42 @@ fun ZeroNavGraph(startDestination: String = "todos") {
             ) {
                 DebugScreen(onOpenDashboard = {
                     nav.navigate("dashboard") {
+                        popUpTo(nav.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                })
+            }
+            composable(
+                route = "settings",
+                enterTransition = { slideInHorizontally(initialOffsetX = { -it }) },
+                exitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
+                popEnterTransition = { slideInHorizontally(initialOffsetX = { it }) },
+                popExitTransition = { slideOutHorizontally(targetOffsetX = { -it }) }
+            ) {
+                SettingsScreen(onOpenDashboard = {
+                    nav.navigate("dashboard") {
+                        popUpTo(nav.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }, onOpenDataset = {
+                    nav.navigate("dataset") {
+                        popUpTo(nav.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                })
+            }
+            composable(
+                route = "dataset",
+                enterTransition = { slideInHorizontally(initialOffsetX = { -it }) },
+                exitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
+                popEnterTransition = { slideInHorizontally(initialOffsetX = { it }) },
+                popExitTransition = { slideOutHorizontally(targetOffsetX = { -it }) }
+            ) {
+                DatasetManageScreen(onOpenSettings = {
+                    nav.navigate("settings") {
                         popUpTo(nav.graph.startDestinationId) { saveState = true }
                         launchSingleTop = true
                         restoreState = true

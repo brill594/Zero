@@ -12,6 +12,7 @@ import com.brill.zero.data.db.TodoEntity
 import com.brill.zero.data.repo.ZeroRepository
 import com.brill.zero.ml.L2ProcessResult
 import com.brill.zero.ml.NlpProcessor
+import com.brill.zero.settings.AppSettings
 
 class MediumPriorityWorker(
     appContext: Context,
@@ -34,13 +35,18 @@ class MediumPriorityWorker(
         val level = battIntent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
         val scale = battIntent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
         val pct = if (level >= 0 && scale > 0) (level * 100) / scale else -1
-        val notLow = pct == -1 || pct >= 15
+        val threshold = AppSettings.getBatteryThreshold(applicationContext)
+        val notLow = pct == -1 || pct >= threshold
         val powerOk = charging || notLow
         if (!powerOk) return Result.retry()
 
         val repo = ZeroRepository.get(applicationContext)
         val nlp  = NlpProcessor(applicationContext)
         val slm  = nlp.l3SlmProcessor   // ✅ 新命名（原 l3_slm_processor）
+        runCatching {
+            val threads = AppSettings.getL3Threads(applicationContext)
+            slm.setThreadsOverride(threads)
+        }
 
         val batch = repo.nextMediumBatch(limit = 25)
         val processedIds = mutableListOf<Long>()  // ✅ 用 val 即可（列表可变）

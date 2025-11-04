@@ -8,7 +8,7 @@ interface NotificationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(item: NotificationEntity): Long
 
-    @Query("SELECT * FROM notifications WHERE priority = :p ORDER BY postedAt DESC LIMIT :limit")
+    @Query("SELECT * FROM notifications WHERE COALESCE(userPriority, priority) = :p ORDER BY postedAt DESC LIMIT :limit")
     fun streamByPriority(p: String, limit: Int = 50): Flow<List<NotificationEntity>>
 
     @Query("SELECT * FROM notifications WHERE processed = 0 AND priority = 'MEDIUM' ORDER BY postedAt ASC LIMIT :limit")
@@ -16,6 +16,9 @@ interface NotificationDao {
 
     @Query("UPDATE notifications SET processed = 1 WHERE id IN (:ids)")
     suspend fun markProcessed(ids: List<Long>)
+
+    @Query("UPDATE notifications SET userPriority = :p WHERE id = :id")
+    suspend fun setUserPriority(id: Long, p: String?)
 
     @Query("SELECT * FROM notifications WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): NotificationEntity?
