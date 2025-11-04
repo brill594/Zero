@@ -6,11 +6,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -38,7 +40,7 @@ fun ZeroNavGraph(startDestination: String = "todos") {
 
     Scaffold(
         bottomBar = {
-            NavigationBar {
+            NavigationBar(containerColor = Color(0xFF1A1A1A)) {
                 items.forEach { item ->
                     val selected = currentRoute == item.route
                     NavigationBarItem(
@@ -51,7 +53,14 @@ fun ZeroNavGraph(startDestination: String = "todos") {
                             }
                         },
                         icon = { Icon(Icons.Outlined.CheckCircle, contentDescription = item.label) },
-                        label = { Text(item.label) }
+                        label = { Text(item.label) },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Color(0xFFE6E6E6),
+                            unselectedIconColor = Color(0xFFE6E6E6),
+                            selectedTextColor = Color(0xFFE6E6E6),
+                            unselectedTextColor = Color(0xFFE6E6E6),
+                            indicatorColor = Color(0xFF333333)
+                        )
                     )
                 }
             }

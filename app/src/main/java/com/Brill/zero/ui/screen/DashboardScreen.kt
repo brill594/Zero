@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.brill.zero.ui.screen
 
 import androidx.compose.foundation.layout.*
@@ -8,6 +9,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.brill.zero.nls.PermissionUtils // [!] 导入我们的工具
 
@@ -21,15 +23,25 @@ fun DashboardScreen() {
         value = PermissionUtils.isNotificationServiceEnabled(context)
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp)
-            .padding(top = 120.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(24.dp)
-    ) {
-        Text("ZERO", style = MaterialTheme.typography.headlineLarge)
+    Scaffold(topBar = {
+        TopAppBar(
+            title = { Text("仪表盘") },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = Color(0xFF1A1A1A),
+                titleContentColor = Color(0xFFE6E6E6)
+            )
+        )
+    }) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(24.dp)
+                .padding(top = 120.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            Text("ZERO", style = MaterialTheme.typography.headlineLarge)
 
         // [!!!] V27 修复: 权限引导按钮 [!!!]
         if (!hasPermission) {
@@ -52,5 +64,6 @@ fun DashboardScreen() {
         // 导航按钮已移至底部导航栏
 
         Text("Nothing-style · 本地SLM整理通知与待办", style = MaterialTheme.typography.labelLarge)
+        }
     }
 }

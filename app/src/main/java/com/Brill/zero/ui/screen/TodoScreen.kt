@@ -29,12 +29,12 @@ fun TodoScreen() {
     Scaffold(topBar = {
         TopAppBar(
             title = {
-                Column {
-                    Text("Zero", style = MaterialTheme.typography.titleLarge)
-                    Spacer(Modifier.height(2.dp))
-                    Text("To‑Do", style = MaterialTheme.typography.titleMedium)
-                }
-            }
+                Text("To‑Do", style = MaterialTheme.typography.titleLarge)
+            },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = Color(0xFF1A1A1A),
+                titleContentColor = Color(0xFFE6E6E6)
+            )
         )
     }) { padding ->
         LazyColumn(
@@ -45,14 +45,23 @@ fun TodoScreen() {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(items) { t ->
-                ElevatedCard {
+                ElevatedCard(
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = Color(0xFF1A1A1A)
+                    )
+                ) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         // 第一行：意图
                         val intentText = t.sourceNotificationKey ?: "(未设置意图)"
-                        Text(intentText, style = MaterialTheme.typography.titleMedium)
+                        Text(intentText, style = MaterialTheme.typography.titleMedium, color = Color(0xFFE6E6E6))
                         // 第二行：摘要 + 完成按钮（右侧空心圆）
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(t.title, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                            Text(
+                                t.title,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(1f),
+                                color = Color(0xFFE6E6E6)
+                            )
                             // Larger hollow circle button
                             Box(
                                 Modifier

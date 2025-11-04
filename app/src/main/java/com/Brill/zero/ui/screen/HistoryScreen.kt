@@ -30,7 +30,15 @@ fun HistoryScreen() {
     val lows by repo.streamByPriority("LOW").collectAsState(initial = emptyList())
 
 
-    Scaffold(topBar = { TopAppBar(title = { Text("History") }) }) { padding ->
+    Scaffold(topBar = {
+        TopAppBar(
+            title = { Text("History") },
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = androidx.compose.ui.graphics.Color(0xFF1A1A1A),
+                titleContentColor = androidx.compose.ui.graphics.Color(0xFFE6E6E6)
+            )
+        )
+    }) { padding ->
         LazyColumn(
             Modifier
                 .fillMaxSize()

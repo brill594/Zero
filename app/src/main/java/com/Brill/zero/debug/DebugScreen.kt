@@ -64,7 +64,15 @@ fun DebugScreen() {
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Zero · Debug Console") }) }
+        topBar = {
+            TopAppBar(
+                title = { Text("Zero · Debug Console") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = androidx.compose.ui.graphics.Color(0xFF1A1A1A),
+                    titleContentColor = androidx.compose.ui.graphics.Color(0xFFE6E6E6)
+                )
+            )
+        }
     ) { padding ->
         Column(
             Modifier
