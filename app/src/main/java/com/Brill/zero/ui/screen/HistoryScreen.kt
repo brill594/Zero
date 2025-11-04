@@ -30,20 +30,22 @@ fun HistoryScreen() {
     val lows by repo.streamByPriority("LOW").collectAsState(initial = emptyList())
 
 
-    Scaffold(topBar = {
-        TopAppBar(
-            title = { Text("History") },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = androidx.compose.ui.graphics.Color(0xFF1A1A1A),
-                titleContentColor = androidx.compose.ui.graphics.Color(0xFFE6E6E6)
-            )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+    ) {
+        // 删除标题栏背景，并将标题上移至内容顶部
+        Text(
+            "History",
+            style = MaterialTheme.typography.titleLarge,
+            color = androidx.compose.ui.graphics.Color(0xFFE6E6E6),
+            modifier = Modifier.padding(top = 8.dp, bottom = 12.dp)
         )
-    }) { padding ->
+
         LazyColumn(
             Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
+                .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item { Text("高优先级", style = MaterialTheme.typography.titleLarge) }

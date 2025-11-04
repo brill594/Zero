@@ -63,23 +63,21 @@ fun DebugScreen() {
         runCatching { l1.preload() }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Zero · Debug Console") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = androidx.compose.ui.graphics.Color(0xFF1A1A1A),
-                    titleContentColor = androidx.compose.ui.graphics.Color(0xFFE6E6E6)
-                )
-            )
-        }
-    ) { padding ->
-        Column(
-            Modifier
-                .padding(padding)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState())
-        ) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        // 删除标题栏背景，将标题移至内容区顶部
+        Text(
+            "Zero · Debug Console",
+            style = MaterialTheme.typography.titleLarge,
+            color = androidx.compose.ui.graphics.Color(0xFFE6E6E6),
+            modifier = Modifier.padding(top = 8.dp, bottom = 12.dp)
+        )
+
+        Column(Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },

@@ -28,11 +28,9 @@ private data class NavItem(val label: String, val route: String)
 @Composable
 fun ZeroNavGraph(startDestination: String = "todos") {
     val nav = rememberNavController()
+    // 底部导航仅保留“仪表盘”，其余页面入口移至仪表盘页面内
     val items = listOf(
-        NavItem("To‑Do", "todos"),
-        NavItem("历史通知", "history"),
-        NavItem("仪表盘", "dashboard"),
-        NavItem("Debug", "debug")
+        NavItem("仪表盘", "dashboard")
     )
 
     val backStack by nav.currentBackStackEntryAsState()
@@ -67,10 +65,42 @@ fun ZeroNavGraph(startDestination: String = "todos") {
         }
     ) { padding ->
         NavHost(navController = nav, startDestination = startDestination, modifier = Modifier.padding(padding)) {
-            composable("dashboard") { DashboardScreen() }
-            composable("todos") { TodoScreen() }
-            composable("history") { HistoryScreen() }
-            composable("debug") { DebugScreen() }   // ★ 你的调试页
+            composable("dashboard") {
+                DashboardScreen(onNavigate = { route ->
+                    nav.navigate(route) {
+                        popUpTo(nav.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                })
+            }
+            composable("todos") {
+                TodoScreen(onOpenDashboard = {
+                    nav.navigate("dashboard") {
+                        popUpTo(nav.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                })
+            }
+            composable("history") {
+                HistoryScreen(onOpenDashboard = {
+                    nav.navigate("dashboard") {
+                        popUpTo(nav.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                })
+            }
+            composable("debug") {
+                DebugScreen(onOpenDashboard = {
+                    nav.navigate("dashboard") {
+                        popUpTo(nav.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                })
+            }
         }
     }
 }

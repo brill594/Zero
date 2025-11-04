@@ -26,22 +26,23 @@ fun TodoScreen() {
     val items by repo.openTodos.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
 
-    Scaffold(topBar = {
-        TopAppBar(
-            title = {
-                Text("To‑Do", style = MaterialTheme.typography.titleLarge)
-            },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = Color(0xFF1A1A1A),
-                titleContentColor = Color(0xFFE6E6E6)
-            )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+    ) {
+        // 删除标题栏背景，改为内容区标题，并上移到更靠近顶部
+        Text(
+            "To‑Do",
+            style = MaterialTheme.typography.titleLarge,
+            color = Color(0xFFE6E6E6),
+            modifier = Modifier.padding(top = 8.dp, bottom = 12.dp)
         )
-    }) { padding ->
+
         LazyColumn(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
+                .fillMaxWidth()
+                .weight(1f),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(items) { t ->

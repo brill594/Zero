@@ -23,21 +23,23 @@ fun DashboardScreen() {
         value = PermissionUtils.isNotificationServiceEnabled(context)
     }
 
-    Scaffold(topBar = {
-        TopAppBar(
-            title = { Text("仪表盘") },
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = Color(0xFF1A1A1A),
-                titleContentColor = Color(0xFFE6E6E6)
-            )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp)
+    ) {
+        // 删除标题栏背景，并将标题上移至内容顶部
+        Text(
+            "仪表盘",
+            style = MaterialTheme.typography.titleLarge,
+            color = Color(0xFFE6E6E6),
+            modifier = Modifier.padding(top = 8.dp, bottom = 12.dp)
         )
-    }) { padding ->
+
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(24.dp)
-                .padding(top = 120.dp),
+                .fillMaxWidth()
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
