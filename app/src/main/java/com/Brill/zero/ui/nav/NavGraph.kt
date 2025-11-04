@@ -14,9 +14,9 @@ import com.brill.zero.debug.DebugScreen
 
 
 @Composable
-fun ZeroNavGraph() {
+fun ZeroNavGraph(startDestination: String = "dashboard") {
     val nav = rememberNavController()
-    NavHost(navController = nav, startDestination = "dashboard") {
+    NavHost(navController = nav, startDestination = startDestination) {
         composable("dashboard") { DashboardScreen(onOpenTodos = { nav.navigate("todos") }, onOpenHistory = { nav.navigate("history") },onOpenDebug={nav.navigate("debug")}) }
         composable("todos") { TodoScreen() }
         composable("history") { HistoryScreen() }

@@ -34,9 +34,9 @@ fun DebugScreen() {
     val slm = remember { nlp.l3SlmProcessor }
     val repo = remember { com.brill.zero.data.repo.ZeroRepository.get(ctx) }
 
-    // 线程选择（默认使用设备可用核心数的上限 8）
+    // 线程选择（默认改为 1）
     val cores = remember { Runtime.getRuntime().availableProcessors() }
-    var threads by remember { mutableStateOf(cores.coerceAtMost(8)) }
+    var threads by remember { mutableStateOf(1) }
     LaunchedEffect(threads) { slm.setThreadsOverride(threads) }
 
     // GPU 卸载层数（0 表示禁用 GPU）

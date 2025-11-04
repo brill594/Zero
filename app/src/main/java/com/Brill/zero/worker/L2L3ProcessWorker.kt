@@ -46,6 +46,8 @@ class L2L3ProcessWorker(appContext: Context, params: WorkerParameters) : Corouti
                 repo.markProcessed(listOf(n.id))
             }
             is L2ProcessResult.RequiresL3Slm -> {          // ✅ 新名字
+                // 自动处理时强制使用单线程
+                stage2Processor.l3SlmProcessor.setThreadsOverride(1)
                 val t = stage2Processor.l3SlmProcessor     // ✅ 新名字
                     .process(full, res.intent)
                 if (t != null) {

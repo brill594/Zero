@@ -124,7 +124,8 @@ class L3_SLM_Processor(private val context: Context) {
             val mFree = clazz.getMethod("nativeFree", java.lang.Long.TYPE)
 
             val modelPath = ensureLocalModelPath()
-            val defaultThreads = Runtime.getRuntime().availableProcessors().coerceAtMost(8)
+            // 默认线程改为 1；UI 可通过 setThreadsOverride 覆盖
+            val defaultThreads = 1
             val threads = (threadsOverride ?: defaultThreads).coerceAtMost(8)
             // 缩小上下文窗口以提升推理速度（提示词约 200 tokens 足够）
             // Vulkan/其他 GPU 后端可用时，传递非零 nGpuLayers 以尽可能将层卸载到 GPU
@@ -163,7 +164,18 @@ class L3_SLM_Processor(private val context: Context) {
     // 为避免 nativeCompletion 长时间阻塞，增加软超时包装。
     private fun tryRunViaJNIWithTimeout(prompt: String, timeoutMs: Long = 900000): String? {
         val exec = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
-            Thread(r, "L3JNI").apply { isDaemon = true }
+            Thread({
+                // 提升推理线程优先级，帮助系统更倾向在大核调度
+                try {
+                    android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_DISPLAY)
+                } catch (t: Throwable) {
+                    android.util.Log.w("ZeroL3-SLM", "设置线程优先级失败: ${t.message}")
+                }
+                r.run()
+            }, "L3JNI").apply {
+                isDaemon = true
+                priority = Thread.MAX_PRIORITY
+            }
         }
         return try {
             val future = exec.submit<String?> {
