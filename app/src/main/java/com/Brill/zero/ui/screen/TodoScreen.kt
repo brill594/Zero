@@ -26,7 +26,17 @@ fun TodoScreen() {
     val items by repo.openTodos.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
 
-    Scaffold(topBar = { TopAppBar(title = { Text("To‑Do") }) }) { padding ->
+    Scaffold(topBar = {
+        TopAppBar(
+            title = {
+                Column {
+                    Text("Zero", style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(2.dp))
+                    Text("To‑Do", style = MaterialTheme.typography.titleMedium)
+                }
+            }
+        )
+    }) { padding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()

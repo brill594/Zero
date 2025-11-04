@@ -12,8 +12,7 @@ import androidx.compose.ui.unit.dp
 import com.brill.zero.nls.PermissionUtils // [!] 导入我们的工具
 
 @Composable
-fun DashboardScreen(onOpenTodos: () -> Unit, onOpenHistory: () -> Unit,    onOpenDebug: () -> Unit
-) {
+fun DashboardScreen() {
 
     val context = LocalContext.current
 
@@ -50,19 +49,7 @@ fun DashboardScreen(onOpenTodos: () -> Unit, onOpenHistory: () -> Unit,    onOpe
             )
         }
 
-        OutlinedButton(
-            onClick = onOpenTodos,
-            border = ButtonDefaults.outlinedButtonBorder.copy(width = 1.dp),
-            enabled = hasPermission // [!] 仅在有权限时才启用
-        ) { Text("To‑Do") }
-
-        OutlinedButton(
-            onClick = onOpenHistory,
-            enabled = hasPermission // [!] 仅在有权限时才启用
-        ) { Text("历史通知") }
-        OutlinedButton(onClick = onOpenDebug) {
-            Text("Debug")
-        }
+        // 导航按钮已移至底部导航栏
 
         Text("Nothing-style · 本地SLM整理通知与待办", style = MaterialTheme.typography.labelLarge)
     }

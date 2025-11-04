@@ -25,6 +25,10 @@
     <li>标题栏添加手动刷新按钮，点击强制 <code>notifyAppWidgetViewDataChanged</code> 并更新。</li>
     <li>将集合项中 <code>View</code> 替换为 <code>ImageView</code>，并用纯色 <code>shape</code> 保证兼容。</li>
     <li>点击列表项将打开应用并直接进入 <code>To‑Do</code> 页面。</li>
+    <li>应用切换为底部导航栏（Dashboard / To‑Do / History / Debug）。</li>
+    <li>默认主页改为 <code>To‑Do</code>：首次打开或无显式路由时直接进入待办。</li>
+    <li>仪表盘页面移除页内跳转按钮，统一由底部导航承载。</li>
+    <li><code>To‑Do</code> 页顶部标题为两行：上方 <code>Zero</code> 字体更大，下方 <code>To‑Do</code> 较小。</li>
     <li>预收缩布局：文本、间距与图标统一下调约 8%，并在代码中应用 <code>scale≈0.92</code>，以抵消宿主稳定的放大行为。</li>
     <li>调整默认高度：将 <code>minHeight</code> 从 <code>200dp</code> 降为 <code>160dp</code>，更紧凑。</li>
     <li>降低行高：每条 To‑Do 的 <code>minHeight=44dp</code>、<code>padding=8dp</code>，分隔线 <code>4dp</code>，底部黑色区域更充裕。</li>

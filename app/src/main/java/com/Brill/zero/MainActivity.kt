@@ -20,7 +20,7 @@ class MainActivity : ComponentActivity() {
         val startRouteExtra = intent?.getStringExtra("open_route")
         setContent {
             ZeroTheme {
-                val startRoute = startRouteExtra ?: "dashboard"
+                val startRoute = startRouteExtra ?: "todos"
                 Surface { ZeroNavGraph(startDestination = startRoute) }
             }
         }
