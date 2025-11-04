@@ -14,6 +14,10 @@ import androidx.compose.ui.unit.dp
 import com.brill.zero.data.repo.ZeroRepository
 import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextAlign
 
 private fun labelOf(n: com.brill.zero.data.db.NotificationEntity): String {
     return n.title?.takeIf { it.isNotBlank() }
@@ -22,7 +26,7 @@ private fun labelOf(n: com.brill.zero.data.db.NotificationEntity): String {
 }
 
 @Composable
-fun HistoryScreen() {
+fun HistoryScreen(onOpenDashboard: () -> Unit = {}) {
     val ctx = LocalContext.current
     val repo = remember { ZeroRepository.get(ctx) }
     val highs by repo.streamByPriority("HIGH").collectAsState(initial = emptyList())
@@ -35,26 +39,36 @@ fun HistoryScreen() {
             .fillMaxSize()
             .padding(horizontal = 16.dp)
     ) {
-        // 删除标题栏背景，并将标题上移至内容顶部
-        Text(
-            "History",
-            style = MaterialTheme.typography.titleLarge,
-            color = androidx.compose.ui.graphics.Color(0xFFE6E6E6),
-            modifier = Modifier.padding(top = 8.dp, bottom = 12.dp)
-        )
+        // 顶部：左上角菜单按钮 + 居中标题
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp, bottom = 12.dp)
+        ) {
+            IconButton(onClick = onOpenDashboard, modifier = Modifier.align(Alignment.CenterStart)) {
+                Icon(Icons.Outlined.Menu, contentDescription = "回到仪表盘")
+            }
+            Text(
+                "History",
+                style = MaterialTheme.typography.titleMedium,
+                color = androidx.compose.ui.graphics.Color(0xFFE6E6E6),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.align(Alignment.Center)
+            )
+        }
 
         LazyColumn(
             Modifier
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item { Text("高优先级", style = MaterialTheme.typography.titleLarge) }
+            item { Text("高优先级", style = MaterialTheme.typography.titleLarge.copy(fontSize = MaterialTheme.typography.titleLarge.fontSize * 2)) }
             items(highs) { n -> NotificationRow(n) }
 
-            item { Spacer(Modifier.height(16.dp)); Text("中优先级", style = MaterialTheme.typography.titleLarge) }
+            item { Spacer(Modifier.height(16.dp)); Text("中优先级", style = MaterialTheme.typography.titleLarge.copy(fontSize = MaterialTheme.typography.titleLarge.fontSize * 2)) }
             items(meds)  { n -> NotificationRow(n) }
 
-            item { Spacer(Modifier.height(16.dp)); Text("低优先级", style = MaterialTheme.typography.titleLarge) }
+            item { Spacer(Modifier.height(16.dp)); Text("低优先级", style = MaterialTheme.typography.titleLarge.copy(fontSize = MaterialTheme.typography.titleLarge.fontSize * 2)) }
             items(lows)  { n -> NotificationRow(n) }
         }
     }
@@ -65,23 +79,23 @@ private fun NotificationRow(n: com.brill.zero.data.db.NotificationEntity) {
     val ctx = LocalContext.current
     val pm = ctx.packageManager
     val iconBitmap = remember(n.pkg) {
-        runCatching { pm.getApplicationIcon(n.pkg).toBitmap(48, 48) }.getOrNull()
+        runCatching { pm.getApplicationIcon(n.pkg).toBitmap(64, 64) }.getOrNull()
     }
     val appName = remember(n.pkg) {
         runCatching { pm.getApplicationLabel(pm.getApplicationInfo(n.pkg, 0)).toString() }.getOrNull() ?: n.pkg
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         if (iconBitmap != null) {
-            Image(bitmap = iconBitmap.asImageBitmap(), contentDescription = appName)
+            Image(bitmap = iconBitmap.asImageBitmap(), contentDescription = appName, modifier = Modifier.size(64.dp))
         } else {
-            Box(Modifier.size(48.dp)) {} // fallback empty space
+            Box(Modifier.size(64.dp)) {} // fallback empty space
         }
         Column(Modifier.weight(1f)) {
-            Text(appName, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(appName, style = MaterialTheme.typography.titleMedium.copy(fontSize = MaterialTheme.typography.titleMedium.fontSize * 2), maxLines = 1, overflow = TextOverflow.Ellipsis)
             val titleLine = n.title?.takeIf { it.isNotBlank() } ?: "(无标题)"
-            Text(titleLine, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(titleLine, style = MaterialTheme.typography.bodyMedium.copy(fontSize = MaterialTheme.typography.bodyMedium.fontSize * 2), maxLines = 1, overflow = TextOverflow.Ellipsis)
             val infoLine = n.text?.takeIf { it.isNotBlank() } ?: "(无内容)"
-            Text(infoLine, style = MaterialTheme.typography.labelSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(infoLine, style = MaterialTheme.typography.labelSmall.copy(fontSize = MaterialTheme.typography.labelSmall.fontSize * 2), maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }

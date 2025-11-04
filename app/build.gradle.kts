@@ -93,6 +93,8 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    // Extended Material Icons for Outlined icon set (e.g., History, Build)
+    implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("com.google.android.material:material:1.12.0") // 或更高稳定版
 
@@ -100,6 +102,9 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
     implementation("androidx.navigation:navigation-compose:2.8.3")
+
+    // Accompanist for animated navigation transitions
+    implementation("com.google.accompanist:accompanist-navigation-animation:0.34.0")
 
 
 // Glance (AppWidget in Compose style)

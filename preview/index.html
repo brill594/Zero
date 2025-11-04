@@ -25,7 +25,7 @@
     <li>标题栏添加手动刷新按钮，点击强制 <code>notifyAppWidgetViewDataChanged</code> 并更新。</li>
     <li>将集合项中 <code>View</code> 替换为 <code>ImageView</code>，并用纯色 <code>shape</code> 保证兼容。</li>
     <li>点击列表项将打开应用并直接进入 <code>To‑Do</code> 页面。</li>
-    <li>应用切换为底部导航栏（Dashboard / To‑Do / History / Debug）。</li>
+    <li>页面切换效果：所有路由启用横向平移动画（进入左侧滑入、退出右侧滑出；返回时相反）。</li>
     <li>默认主页改为 <code>To‑Do</code>：首次打开或无显式路由时直接进入待办。</li>
     <li>仪表盘页面移除页内跳转按钮，统一由底部导航承载。</li>
     <li><code>To‑Do</code> 页顶部标题改为单行更大字号，仅显示 <code>To‑Do</code>（移除 <code>Zero</code>）。</li>
@@ -35,6 +35,10 @@
     <li>同步其他页面顶部栏风格：<code>Dashboard / History / Debug</code> 顶部栏统一使用 <code>#1A1A1A</code> 背景与 <code>#E6E6E6</code> 标题。</li>
     <li>底部导航选中高亮指示（<code>indicatorColor</code>）调暗为 <code>#333333</code>，更贴近黑底风格。</li>
     <li>删除 To‑Do 页标题栏背景，将标题移至内容区顶部并上移到更靠近状态栏的位置。</li>
+    <li>统一改动：所有页面标题居中显示，To‑Do / History / Debug 在左上角新增菜单按钮，点击跳转到 <code>仪表盘</code>。</li>
+    <li>导航改动：底部导航栏已移除；页面通过左上菜单与仪表盘内按钮导航（To‑Do / 历史通知 / Debug）。</li>
+    <li>仪表盘入口改为灰色 bar 风格并配图标，与 To‑Do 条目一致（圆角 18dp）。</li>
+    <li>页面标题恢复原大小：Dashboard / History / Debug / To‑Do 的页面标题统一使用 <code>titleMedium</code> 原始字号（不再加倍）。</li>
     <li>统一调整：同时删除 <code>Dashboard / History / Debug</code> 的标题栏背景，并将各页标题移至内容区顶部，位置与 To‑Do 保持一致。</li>
     <li>预收缩布局：文本、间距与图标统一下调约 8%，并在代码中应用 <code>scale≈0.92</code>，以抵消宿主稳定的放大行为。</li>
     <li>调整默认高度：将 <code>minHeight</code> 从 <code>200dp</code> 降为 <code>160dp</code>，更紧凑。</li>
@@ -42,11 +46,19 @@
     <li>下移标题区：标题/日期整体向下微调 <code>4dp</code>，视觉更平衡。</li>
     <li>收紧标题与日期间距：移除字体额外填充并设定 <code>2dp</code> 间距。</li>
     <li>图标轻微半透明：标题栏图标 <code>alpha=0.85</code>，更柔和。</li>
-    <li>卡片圆角微增：To‑Do 卡片圆角由 <code>16dp</code> 提至 <code>18dp</code>。</li>
+    <li>应用内 To‑Do 卡片圆角微增：由 <code>16dp</code> 提至 <code>18dp</code>。</li>
+    <li>Widget 待办条目圆角微减：由 <code>18dp</code> 降至 <code>16dp</code>（左侧色条保持直角）。</li>
+    <li>图标尺寸调整：仪表盘入口图标增至 <code>32dp</code>；历史通知页应用图标增至 <code>64dp</code>。</li>
+    <li>仪表盘页面文字采用资产字体 <code>VT323</code>（<code>app/src/main/assets/fonts/VT323-Regular.ttf</code>），包含标题、入口条文本、权限提示与说明文本；入口按钮文字已适当减小（约为原 <code>titleMedium</code> 的 1.5×）。</li>
     <li>统一左边距：标题/日期与列表文本对齐至同一左边距。</li>
     <li>减小水平内边距：整体左右留白由 <code>10dp</code> 降至 <code>8dp</code>。</li>
     <li>右侧按钮更贴边：标题区右侧内边距设为 <code>0dp</code>。</li>
     <li>空态对齐：标题/日期与“暂无待办”采用相同左边距 <code>8dp</code>。</li>
+    <li>To‑Do 页面右上角新增“手动添加”按钮：输入一句话后自动运行 L2 意图识别；若该意图需要截止时间，则调用 L3 SLM，仅提取并保存 <code>due time</code> 字段。</li>
+    <li>L3 SLM 默认线程调整为 <code>4</code>（可通过 UI 覆盖）。</li>
+    <li>所有弹出窗口（AlertDialog）统一使用 bar 灰色：背景 <code>#1A1A1A</code>、标题与正文文字 <code>#E6E6E6</code>。</li>
+    <li>点击“创建”后窗口自动关闭，并在 To‑Do 页面先创建条目；截止时间（Due time）初始不显示。</li>
+    <li>待办条目尾部显示动态转圈表示后台处理中，处理完成后自动更新并显示截止时间。</li>
   </ul>
   <p>注意：该页面仅用于说明变更，不是 Android 真实渲染效果预览。</p>
 </body>

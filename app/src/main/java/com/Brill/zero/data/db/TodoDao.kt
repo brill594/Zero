@@ -20,6 +20,9 @@ interface TodoDao {
     @Query("UPDATE todos SET status = 'DONE' WHERE id = :id")
     suspend fun markDone(id: Long)
 
+    @Query("UPDATE todos SET dueAt = :dueAt WHERE id = :id")
+    suspend fun setDueAt(id: Long, dueAt: Long?)
+
     @Query("DELETE FROM todos")
     suspend fun clearAll()
 }

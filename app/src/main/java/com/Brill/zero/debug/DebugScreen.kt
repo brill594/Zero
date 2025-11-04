@@ -11,6 +11,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextAlign
 import com.brill.zero.domain.model.Priority
 import com.brill.zero.ml.NlpProcessor
 import com.brill.zero.ml.PriorityClassifier
@@ -24,7 +28,7 @@ import com.brill.zero.data.db.TodoEntity
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DebugScreen() {
+fun DebugScreen(onOpenDashboard: () -> Unit = {}) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -69,13 +73,23 @@ fun DebugScreen() {
             .padding(horizontal = 16.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        // 删除标题栏背景，将标题移至内容区顶部
-        Text(
-            "Zero · Debug Console",
-            style = MaterialTheme.typography.titleLarge,
-            color = androidx.compose.ui.graphics.Color(0xFFE6E6E6),
-            modifier = Modifier.padding(top = 8.dp, bottom = 12.dp)
-        )
+        // 顶部：左上角菜单按钮 + 居中标题
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp, bottom = 12.dp)
+        ) {
+            IconButton(onClick = onOpenDashboard, modifier = Modifier.align(Alignment.CenterStart)) {
+                Icon(Icons.Outlined.Menu, contentDescription = "回到仪表盘")
+            }
+            Text(
+                "Zero · Debug Console",
+                style = MaterialTheme.typography.titleMedium,
+                color = androidx.compose.ui.graphics.Color(0xFFE6E6E6),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.align(Alignment.Center)
+            )
+        }
 
         Column(Modifier.fillMaxWidth()) {
             OutlinedTextField(
@@ -103,7 +117,12 @@ fun DebugScreen() {
                     }
                 }) { Text("Run L1") }
                 Spacer(Modifier.width(12.dp))
-                Text(resultLine(l1Out?.name, l1Time))
+                Text(
+                    resultLine(l1Out?.name, l1Time),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = MaterialTheme.typography.bodyMedium.fontSize * 2
+                    )
+                )
             }
 
             Spacer(Modifier.height(20.dp))
@@ -122,10 +141,15 @@ fun DebugScreen() {
                     }
                 }) { Text("Run L2") }
                 Spacer(Modifier.width(12.dp))
-                Text(resultLine(
-                    l2Out?.first,
-                    l2Time
-                ))
+                Text(
+                    resultLine(
+                        l2Out?.first,
+                        l2Time
+                    ),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = MaterialTheme.typography.bodyMedium.fontSize * 2
+                    )
+                )
             }
 
             Spacer(Modifier.height(20.dp))
@@ -135,7 +159,12 @@ fun DebugScreen() {
             Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                 Switch(checked = l3UseL2, onCheckedChange = { l3UseL2 = it })
                 Spacer(Modifier.width(8.dp))
-                Text(if (l3UseL2) "使用 L2 预测意图" else "手动选择意图")
+                Text(
+                    if (l3UseL2) "使用 L2 预测意图" else "手动选择意图",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = MaterialTheme.typography.bodyMedium.fontSize * 2
+                    )
+                )
             }
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {

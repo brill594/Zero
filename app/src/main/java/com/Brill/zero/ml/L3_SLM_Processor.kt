@@ -124,8 +124,8 @@ class L3_SLM_Processor(private val context: Context) {
             val mFree = clazz.getMethod("nativeFree", java.lang.Long.TYPE)
 
             val modelPath = ensureLocalModelPath()
-            // 默认线程改为 1；UI 可通过 setThreadsOverride 覆盖
-            val defaultThreads = 1
+            // 默认线程改为 4；UI 可通过 setThreadsOverride 覆盖
+            val defaultThreads = 4
             val threads = (threadsOverride ?: defaultThreads).coerceAtMost(8)
             // 缩小上下文窗口以提升推理速度（提示词约 200 tokens 足够）
             // Vulkan/其他 GPU 后端可用时，传递非零 nGpuLayers 以尽可能将层卸载到 GPU

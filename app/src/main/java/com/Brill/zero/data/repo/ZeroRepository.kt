@@ -22,13 +22,19 @@ class ZeroRepository private constructor(private val db: ZeroDatabase, private v
     }
 
 
-    suspend fun saveTodo(todo: TodoEntity) = withContext(Dispatchers.IO) {
-        db.todoDao().upsert(todo)
+    suspend fun saveTodo(todo: TodoEntity): Long = withContext(Dispatchers.IO) {
+        val id = db.todoDao().upsert(todo)
         notifyWidgets()
+        id
     }
 
     suspend fun markTodoDone(id: Long) = withContext(Dispatchers.IO) {
         db.todoDao().markDone(id)
+        notifyWidgets()
+    }
+
+    suspend fun updateTodoDueAt(id: Long, dueAt: Long?) = withContext(Dispatchers.IO) {
+        db.todoDao().setDueAt(id, dueAt)
         notifyWidgets()
     }
 
