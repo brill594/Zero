@@ -117,7 +117,7 @@ fun DebugScreen() {
                 }) { Text("Run L2") }
                 Spacer(Modifier.width(12.dp))
                 Text(resultLine(
-                    l2Out?.first?.let { "$it  (p=${"%.2f".format(l2Out!!.second)})" },
+                    l2Out?.first,
                     l2Time
                 ))
             }
@@ -144,10 +144,8 @@ fun DebugScreen() {
                             l3Out = withContext(Dispatchers.Default) {
                                 val resolved = if (l3UseL2) {
                                     val top = nlp.debugTopIntent(input)
+                                    // Use label only; do not append confidence to intent
                                     l3ResolvedIntent = top?.first ?: l3Intent
-                                    val p = top?.second
-                                    val intentText = top?.first?.let { if (p != null) "$it (p=${"%.2f".format(p)})" else it }
-                                    l3ResolvedIntent = intentText ?: l3Intent
                                     top?.first ?: l3Intent
                                 } else {
                                     l3ResolvedIntent = l3Intent

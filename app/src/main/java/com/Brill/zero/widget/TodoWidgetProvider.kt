@@ -99,18 +99,6 @@ class TodoWidgetProvider : AppWidgetProvider() {
                     }, 150)
                 }
             }
-            ACTION_FORCE_RELOAD -> {
-                val appWidgetId = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
-                Log.d(TAG, "onReceive: ACTION_FORCE_RELOAD appWidgetId=$appWidgetId")
-                val mgr = AppWidgetManager.getInstance(context)
-                if (appWidgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
-                    forceReload(context, mgr, appWidgetId)
-                } else {
-                    val cn = ComponentName(context, TodoWidgetProvider::class.java)
-                    val ids = mgr.getAppWidgetIds(cn)
-                    ids.forEach { id -> forceReload(context, mgr, id) }
-                }
-            }
         }
     }
 
@@ -118,7 +106,6 @@ class TodoWidgetProvider : AppWidgetProvider() {
         const val ACTION_MARK_DONE = "com.brill.zero.widget.ACTION_MARK_DONE"
         const val ACTION_NEXT_DAY = "com.brill.zero.widget.ACTION_NEXT_DAY"
         const val ACTION_MANUAL_REFRESH = "com.brill.zero.widget.ACTION_MANUAL_REFRESH"
-        const val ACTION_FORCE_RELOAD = "com.brill.zero.widget.ACTION_FORCE_RELOAD"
         const val EXTRA_TODO_ID = "todo_id"
 
         fun updateAppWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
@@ -183,13 +170,6 @@ class TodoWidgetProvider : AppWidgetProvider() {
             }
             val refreshPi = PendingIntent.getBroadcast(context, appWidgetId + 2000, refreshIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             views.setOnClickPendingIntent(R.id.widget_header_refresh, refreshPi)
-            // Reset button: force reload this widget instance
-            val resetIntent = Intent(context, TodoWidgetProvider::class.java).apply {
-                action = ACTION_FORCE_RELOAD
-                putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
-            }
-            val resetPi = PendingIntent.getBroadcast(context, appWidgetId + 3000, resetIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            views.setOnClickPendingIntent(R.id.widget_header_reset, resetPi)
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
             // Ensure list refresh to avoid stuck loading state
@@ -225,27 +205,6 @@ class TodoWidgetProvider : AppWidgetProvider() {
             Log.d(TAG, "partialHeaderUpdate: id=$appWidgetId date=$dateStr metrics=${metricsStr(context)} options=${optionsStr(appWidgetManager, appWidgetId)} took=${dt}ms")
         }
 
-        fun forceReload(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
-            val t0 = SystemClock.uptimeMillis()
-            // Normalize min/max width/height to the current min values to avoid host mismatch
-            val opts = appWidgetManager.getAppWidgetOptions(appWidgetId)
-            val minW = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 200)
-            val minH = opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 120)
-            val stable = android.os.Bundle(opts).apply {
-                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, minW)
-                putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, minW)
-                putInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, minH)
-                putInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, minH)
-            }
-            appWidgetManager.updateAppWidgetOptions(appWidgetId, stable)
-            // Extreme stability: avoid full update; only partial header + list refresh after delay
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                partialHeaderUpdate(context, appWidgetManager, appWidgetId)
-                appWidgetManager.notifyAppWidgetViewDataChanged(appWidgetId, R.id.widget_list)
-                val dt = SystemClock.uptimeMillis() - t0
-                Log.d(TAG, "forceReload: id=$appWidgetId metrics=${metricsStr(context)} options=${optionsStr(appWidgetManager, appWidgetId)} took=${dt}ms")
-            }, 3000)
-        }
 
         private fun optionsStr(mgr: AppWidgetManager, id: Int): String {
             return runCatching {
