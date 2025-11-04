@@ -2,7 +2,12 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:orientation="vertical"
-    android:padding="16dp"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
+    android:paddingLeft="12dp"
+    android:paddingRight="12dp"
+    android:paddingTop="18dp"
+    android:paddingBottom="18dp"
     android:background="@drawable/widget_card_bg"
     android:clipToPadding="true"
     android:clipChildren="true"
@@ -19,13 +24,17 @@
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="12dp">
+        android:layout_marginBottom="12dp"
+        android:paddingEnd="10dp"
+        android:paddingRight="10dp">
 
         <LinearLayout
             android:id="@+id/widget_header"
             android:orientation="vertical"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:paddingStart="28dp"
+            android:paddingLeft="28dp">
 
             <TextView
                 android:id="@+id/widget_header_title"
@@ -50,6 +59,7 @@
             android:layout_width="22dp"
             android:layout_height="22dp"
             android:layout_alignParentEnd="true"
+            android:layout_marginEnd="0dp"
             android:src="@android:drawable/ic_media_next"
             android:contentDescription="@string/app_name" />
 
@@ -78,7 +88,7 @@
         android:layout_height="match_parent"
         android:clipToPadding="true"
         android:divider="@android:color/transparent"
-        android:dividerHeight="6dp"
+        android:dividerHeight="8dp"
         android:listSelector="@android:color/transparent"
         android:drawSelectorOnTop="false"
         android:transcriptMode="disabled" />

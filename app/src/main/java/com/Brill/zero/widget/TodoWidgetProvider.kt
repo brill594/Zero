@@ -143,7 +143,7 @@ class TodoWidgetProvider : AppWidgetProvider() {
             // Header content (title and date)
             views.setTextViewText(R.id.widget_header_title, "Zero To-Do")
             val cal = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, offset) }
-            val dateStr = java.text.SimpleDateFormat("MMMM d EEE", java.util.Locale.getDefault()).format(cal.time)
+            val dateStr = java.text.SimpleDateFormat("MMMM d EEE", java.util.Locale.ENGLISH).format(cal.time)
             views.setTextViewText(R.id.widget_header_date, dateStr)
             Log.d(TAG, "updateAppWidget: dateStr=$dateStr")
 
@@ -215,7 +215,7 @@ class TodoWidgetProvider : AppWidgetProvider() {
             }
             views.setTextViewText(R.id.widget_header_title, "Zero To-Do")
             val cal = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, offset) }
-            val dateStr = java.text.SimpleDateFormat("MMMM d EEE", java.util.Locale.getDefault()).format(cal.time)
+            val dateStr = java.text.SimpleDateFormat("MMMM d EEE.", java.util.Locale.ENGLISH).format(cal.time)
             views.setTextViewText(R.id.widget_header_date, dateStr)
             // Scale guard on partial updates
             views.setFloat(R.id.widget_content, "setScaleX", SCALE)
