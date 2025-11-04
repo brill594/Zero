@@ -48,10 +48,15 @@
 #  include "../../../../third_party/llama.cpp/ggml/include/ggml-backend.h"
 #endif
 
-// 强制供应商路径，帮助 IDE 解析 ggml-cpu.h（正常构建会走 CMake include 路径）
-#include "../../../../third_party/llama.cpp/ggml/include/ggml-cpu.h"
+// ggml-cpu.h：优先使用编译器的头搜索路径；若 IDE 未解析 CMake includePath，则提供供应商兜底路径
 #if __has_include("ggml-cpu.h")
 #  include "ggml-cpu.h"
+#elif __has_include("../../../../third_party/llama.cpp/ggml/include/ggml-cpu.h")
+#  include "../../../../third_party/llama.cpp/ggml/include/ggml-cpu.h"
+#elif __has_include("../../../../third_party/llama.cpp/ggml/src/ggml-cpu.h")
+#  include "../../../../third_party/llama.cpp/ggml/src/ggml-cpu.h"
+#else
+#  error "ggml-cpu.h not found: please ensure CMake includes ggml/include and ggml/src"
 #endif
 
 #if __has_include("llama.h")
@@ -218,6 +223,10 @@ Java_com_brill_zero_llama_Llama_nativeCompletion(
     std::string prompt = cprompt ? cprompt : "";
     if (cprompt) env->ReleaseStringUTFChars(jPrompt, cprompt);
 
+    // 可选：回调 Java 端进度方法
+    jclass jLlamaCls = env->FindClass("com/brill/zero/llama/Llama");
+    jmethodID jOnProgress = jLlamaCls ? env->GetStaticMethodID(jLlamaCls, "onNativeProgress", "(II)V") : nullptr;
+
     // 1) 分词（vocab 版）
     std::vector<llama_token> toks = tokenize_with_vocab(st->vocab, prompt, /*add_special*/true, /*parse_special*/false);
     if (toks.empty()) { LOGE("tokenize returned empty"); return env->NewStringUTF(""); }
@@ -299,6 +308,9 @@ Java_com_brill_zero_llama_Llama_nativeCompletion(
             // 仅打印片段的前 32 字符避免日志过长
             std::string frag = piece.size() > 32 ? piece.substr(0, 32) : piece;
             LOGI("llama gen %d tokens, last='%s', out_len=%d", i + 1, frag.c_str(), (int)out.size());
+            if (jOnProgress) {
+                env->CallStaticVoidMethod(jLlamaCls, jOnProgress, (jint)(i + 1), (jint)maxTokens);
+            }
         }
 
         // 如果看到了 '{'，且随后出现了 '}'，则提前结束
@@ -331,6 +343,10 @@ Java_com_brill_zero_llama_Llama_nativeCompletion(
         std::string frag = out.size() > 64 ? out.substr(0, 64) : out;
         LOGI("nativeCompletion gen=%d tokens in %.1f ms (%.2f tok/s), frag='%s'",
              gen_tokens, elapsed_ms, tps, frag.c_str());
+        if (jOnProgress) {
+            // 最终一次回调，报告已生成数（可能小于 maxTokens）
+            env->CallStaticVoidMethod(jLlamaCls, jOnProgress, (jint)gen_tokens, (jint)maxTokens);
+        }
     }
     return env->NewStringUTF(out.c_str());
 }

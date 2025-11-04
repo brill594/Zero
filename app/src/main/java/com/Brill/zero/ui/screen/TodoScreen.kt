@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 import com.brill.zero.ml.NlpProcessor
 import com.brill.zero.data.db.TodoEntity
 
@@ -42,6 +43,7 @@ fun TodoScreen(onOpenDashboard: () -> Unit = {}) {
     var showAddDialog by remember { mutableStateOf(false) }
     var manualText by remember { mutableStateOf("") }
     var processingIds by remember { mutableStateOf(setOf<Long>()) }
+    var processingProgress by remember { mutableStateOf(mapOf<Long, Float>()) }
 
     // 默认将 L3 线程设置为 4（UI 可覆盖）
     LaunchedEffect(Unit) { slm.setThreadsOverride(4) }
@@ -81,8 +83,22 @@ fun TodoScreen(onOpenDashboard: () -> Unit = {}) {
                     TextField(
                         value = manualText,
                         onValueChange = { manualText = it },
-                        placeholder = { Text("请输入一句描述，如：明早9点与张总对齐") },
-                        singleLine = true
+                        placeholder = { Text("请输入一句描述，如：明早9点与张总对齐", color = Color(0xFFB3B3B3)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(color = Color(0xFFE6E6E6)),
+                        colors = TextFieldDefaults.colors(
+                            focusedTextColor = Color(0xFFE6E6E6),
+                            unfocusedTextColor = Color(0xFFE6E6E6),
+                            focusedContainerColor = Color(0xFF1A1A1A),
+                            unfocusedContainerColor = Color(0xFF1A1A1A),
+                            focusedPlaceholderColor = Color(0xFFB3B3B3),
+                            unfocusedPlaceholderColor = Color(0xFFB3B3B3),
+                            cursorColor = Color(0xFFE6E6E6),
+                            focusedIndicatorColor = Color(0xFF666666),
+                            unfocusedIndicatorColor = Color(0xFF444444)
+                        )
                     )
                 },
                 containerColor = Color(0xFF1A1A1A),
@@ -117,9 +133,23 @@ fun TodoScreen(onOpenDashboard: () -> Unit = {}) {
                                 val intentsRequiringDue = setOf("日程提醒", "工作沟通")
                                 if (intentLabel != null && intentLabel in intentsRequiringDue) {
                                     processingIds = processingIds + id
+                                    // 启动 23 秒倒计时（每 100ms 更新一次，提前完成则直接置满）
+                                    scope.launch {
+                                        val totalMs = 23_000L
+                                        val t0 = android.os.SystemClock.uptimeMillis()
+                                        while (processingIds.contains(id)) {
+                                            val elapsed = android.os.SystemClock.uptimeMillis() - t0
+                                            val p = (elapsed.toFloat() / totalMs.toFloat()).coerceIn(0f, 1f)
+                                            processingProgress = processingProgress + (id to p)
+                                            if (p >= 1f) break
+                                            delay(100)
+                                        }
+                                    }
                                     val out = withContext(Dispatchers.Default) { slm.process(text, intentLabel) }
                                     val dueEpoch = out?.dueAt
                                     repo.updateTodoDueAt(id, dueEpoch)
+                                    // 完成后直接置满进度并移除处理标记
+                                    processingProgress = processingProgress + (id to 1f)
                                     processingIds = processingIds - id
                                 }
                             }
@@ -164,7 +194,9 @@ fun TodoScreen(onOpenDashboard: () -> Unit = {}) {
                             )
                             // 处理中的条目：右侧显示转圈；否则显示可点击的空心圆“完成框”
                             if (processingIds.contains(t.id)) {
+                                val p = processingProgress[t.id] ?: 0.25f
                                 CircularProgressIndicator(
+                                    progress = p,
                                     modifier = Modifier.size(28.dp),
                                     color = Color(0xFFE6E6E6),
                                     strokeWidth = 2.dp

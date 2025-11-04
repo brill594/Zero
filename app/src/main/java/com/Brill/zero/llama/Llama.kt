@@ -1,7 +1,22 @@
 package com.brill.zero.llama
 
 object Llama {
-    init { System.loadLibrary("llamajni") }
+    init { 
+        try { System.loadLibrary("llamajni") } catch (_: Throwable) { /* ignore for non-JNI builds */ }
+    }
+
+    interface ProgressListener {
+        fun onProgress(tokensGenerated: Int, maxTokens: Int)
+    }
+    @Volatile private var listener: ProgressListener? = null
+
+    @JvmStatic fun setProgressListener(l: ProgressListener) { listener = l }
+    @JvmStatic fun clearProgressListener() { listener = null }
+
+    // Called from JNI
+    @JvmStatic fun onNativeProgress(tokensGenerated: Int, maxTokens: Int) {
+        listener?.onProgress(tokensGenerated, maxTokens)
+    }
 
     @JvmStatic external fun nativeInit(
         modelPath: String,

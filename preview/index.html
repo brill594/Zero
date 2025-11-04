@@ -57,8 +57,10 @@
     <li>To‑Do 页面右上角新增“手动添加”按钮：输入一句话后自动运行 L2 意图识别；若该意图需要截止时间，则调用 L3 SLM，仅提取并保存 <code>due time</code> 字段。</li>
     <li>L3 SLM 默认线程调整为 <code>4</code>（可通过 UI 覆盖）。</li>
     <li>所有弹出窗口（AlertDialog）统一使用 bar 灰色：背景 <code>#1A1A1A</code>、标题与正文文字 <code>#E6E6E6</code>。</li>
+    <li>输入框（TextField）：完全套用 bar 风格 — 圆角 18dp、容器 <code>#1A1A1A</code>，文字 <code>#E6E6E6</code>，占位 <code>#B3B3B3</code>，指示线聚焦 <code>#666666</code> / 非聚焦 <code>#444444</code>，光标 <code>#E6E6E6</code>。</li>
     <li>点击“创建”后窗口自动关闭，并在 To‑Do 页面先创建条目；截止时间（Due time）初始不显示。</li>
-    <li>待办条目尾部显示动态转圈表示后台处理中，处理完成后自动更新并显示截止时间。</li>
+    <li>待办条目尾部显示动态转圈倒计时表示后台处理中，处理完成后自动更新并显示截止时间。</li>
+    <li>倒计时样式：当需要 L3 推理时，右侧显示旋转的 <code>23s</code> 倒计时；若提前完成则立即跳到尾（进度直接置满并结束转圈）。</li>
   </ul>
   <p>注意：该页面仅用于说明变更，不是 Android 真实渲染效果预览。</p>
 </body>
