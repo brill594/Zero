@@ -14,6 +14,9 @@ interface TodoDao {
     @Query("SELECT * FROM todos WHERE status = 'OPEN' ORDER BY dueAt IS NULL, dueAt ASC LIMIT 1")
     suspend fun getNextOpen(): TodoEntity?
 
+    @Query("SELECT * FROM todos WHERE status = 'OPEN' ORDER BY dueAt IS NULL, dueAt ASC LIMIT :limit")
+    suspend fun getOpen(limit: Int): List<TodoEntity>
+
     @Query("UPDATE todos SET status = 'DONE' WHERE id = :id")
     suspend fun markDone(id: Long)
 

@@ -41,27 +41,15 @@ class TodoWidgetProvider : AppWidgetProvider() {
         fun updateAppWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
             val views = RemoteViews(context.packageName, R.layout.widget_todo)
 
-            val repo = ZeroRepository.get(context)
-            val next = runBlocking { repo.getNextOpenTodo() }
+            // Set the remote adapter for the list to our service
+            val svcIntent = Intent(context, TodoWidgetService::class.java)
+            views.setRemoteAdapter(R.id.widget_list, svcIntent)
+            views.setEmptyView(R.id.widget_list, R.id.widget_empty)
 
-            if (next != null) {
-                val intentText = next.sourceNotificationKey ?: "(未设置意图)"
-                views.setTextViewText(R.id.widget_intent, intentText)
-                views.setTextViewText(R.id.widget_summary, next.title)
-                val dueLine = next.dueAt?.let { java.text.DateFormat.getDateTimeInstance().format(java.util.Date(it)) } ?: "无截止时间"
-                views.setTextViewText(R.id.widget_due, dueLine)
-
-                val doneIntent = Intent(context, TodoWidgetProvider::class.java).apply {
-                    action = ACTION_MARK_DONE
-                    putExtra(EXTRA_TODO_ID, next.id)
-                }
-                val pi = PendingIntent.getBroadcast(context, appWidgetId, doneIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-                views.setOnClickPendingIntent(R.id.widget_done, pi)
-            } else {
-                views.setTextViewText(R.id.widget_intent, "(暂无待办)")
-                views.setTextViewText(R.id.widget_summary, "")
-                views.setTextViewText(R.id.widget_due, "")
-            }
+            // PendingIntent template for mark-done fill-in intents
+            val template = Intent(context, TodoWidgetProvider::class.java).apply { action = ACTION_MARK_DONE }
+            val piTemplate = PendingIntent.getBroadcast(context, appWidgetId, template, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            views.setPendingIntentTemplate(R.id.widget_list, piTemplate)
 
             appWidgetManager.updateAppWidget(appWidgetId, views)
         }

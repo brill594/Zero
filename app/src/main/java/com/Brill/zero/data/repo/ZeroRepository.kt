@@ -30,6 +30,10 @@ class ZeroRepository private constructor(private val db: ZeroDatabase) {
         db.todoDao().getNextOpen()
     }
 
+    suspend fun getOpenTodos(limit: Int = 5): List<TodoEntity> = withContext(Dispatchers.IO) {
+        db.todoDao().getOpen(limit)
+    }
+
 
     suspend fun nextMediumBatch(limit: Int = 25) = db.notificationDao().nextUnprocessedMedium(limit)
 
