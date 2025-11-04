@@ -62,13 +62,13 @@ fun HistoryScreen(onOpenDashboard: () -> Unit = {}) {
                 .fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item { Text("高优先级", style = MaterialTheme.typography.titleLarge.copy(fontSize = MaterialTheme.typography.titleLarge.fontSize * 2)) }
+            item { Text("高优先级", style = MaterialTheme.typography.titleSmall) }
             items(highs) { n -> NotificationRow(n) }
 
-            item { Spacer(Modifier.height(16.dp)); Text("中优先级", style = MaterialTheme.typography.titleLarge.copy(fontSize = MaterialTheme.typography.titleLarge.fontSize * 2)) }
+            item { Spacer(Modifier.height(16.dp)); Text("中优先级", style = MaterialTheme.typography.titleSmall) }
             items(meds)  { n -> NotificationRow(n) }
 
-            item { Spacer(Modifier.height(16.dp)); Text("低优先级", style = MaterialTheme.typography.titleLarge.copy(fontSize = MaterialTheme.typography.titleLarge.fontSize * 2)) }
+            item { Spacer(Modifier.height(16.dp)); Text("低优先级", style = MaterialTheme.typography.titleSmall) }
             items(lows)  { n -> NotificationRow(n) }
         }
     }
@@ -91,11 +91,13 @@ private fun NotificationRow(n: com.brill.zero.data.db.NotificationEntity) {
             Box(Modifier.size(64.dp)) {} // fallback empty space
         }
         Column(Modifier.weight(1f)) {
-            Text(appName, style = MaterialTheme.typography.titleMedium.copy(fontSize = MaterialTheme.typography.titleMedium.fontSize * 2), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(appName, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val titleLine = n.title?.takeIf { it.isNotBlank() } ?: "(无标题)"
-            Text(titleLine, style = MaterialTheme.typography.bodyMedium.copy(fontSize = MaterialTheme.typography.bodyMedium.fontSize * 2), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            // 主题（subject）字体应小于内容字体
+            Text(titleLine, style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val infoLine = n.text?.takeIf { it.isNotBlank() } ?: "(无内容)"
-            Text(infoLine, style = MaterialTheme.typography.labelSmall.copy(fontSize = MaterialTheme.typography.labelSmall.fontSize * 2), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            // 内容（content）字体比主题更大、可读性更好
+            Text(infoLine, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }

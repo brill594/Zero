@@ -3,6 +3,7 @@ package com.brill.zero.worker
 object WorkDefs {
     // 入参键名（Worker InputData）
     const val KEY_NOTIFICATION_ID = "NOTIFICATION_ID"
+    const val KEY_PRIORITY = "PRIORITY"
 
     // 唯一任务名（基于数据库自增ID，保证同一通知只跑一次）
     fun nameHigh(id: Long) = "l2l3_high_$id"

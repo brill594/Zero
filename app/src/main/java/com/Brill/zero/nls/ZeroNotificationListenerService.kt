@@ -9,6 +9,7 @@ import androidx.work.Constraints
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.BackoffPolicy
 import com.brill.zero.data.db.NotificationEntity
 import com.brill.zero.data.repo.ZeroRepository
 import com.brill.zero.domain.model.Priority
@@ -17,6 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import java.util.concurrent.TimeUnit
 
 /**
  * [!] V26 修复:
@@ -62,7 +64,10 @@ class ZeroNotificationListenerService : NotificationListenerService() {
             val id = repo.saveNotification(entity)
 
             // 3) 依据优先级入队后台任务
-            val input = workDataOf(com.brill.zero.worker.WorkDefs.KEY_NOTIFICATION_ID to id)
+            val input = workDataOf(
+                com.brill.zero.worker.WorkDefs.KEY_NOTIFICATION_ID to id,
+                com.brill.zero.worker.WorkDefs.KEY_PRIORITY to priority.name
+            )
             when (priority) {
                 Priority.HIGH -> {
                     val req = OneTimeWorkRequestBuilder<com.brill.zero.worker.L2L3ProcessWorker>()
@@ -79,12 +84,11 @@ class ZeroNotificationListenerService : NotificationListenerService() {
                 Priority.MEDIUM -> {
                     val constraints = Constraints.Builder()
                         .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
-                        .setRequiresCharging(true)
-                        .setRequiresDeviceIdle(true)
                         .build()
                     val req = OneTimeWorkRequestBuilder<com.brill.zero.worker.L2L3ProcessWorker>()
                         .setInputData(input)
                         .setConstraints(constraints)
+                        .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 15, TimeUnit.MINUTES)
                         .addTag(com.brill.zero.worker.WorkDefs.TAG_L2L3_MEDIUM)
                         .build()
                     workManager.enqueueUniqueWork(
