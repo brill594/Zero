@@ -9,6 +9,7 @@ import com.google.mediapipe.tasks.core.Delegate
 import com.google.mediapipe.tasks.text.textclassifier.TextClassifier
 import com.google.mediapipe.tasks.text.textclassifier.TextClassifierResult
 import com.google.mediapipe.tasks.components.containers.Category
+import java.text.Normalizer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -32,6 +33,30 @@ class PriorityClassifier(private val context: Context) {
         "低优先级" to Priority.LOW,
         "低优先级/垃圾" to Priority.LOW
     )
+
+    // AWE ASCII 预处理：与训练保持一致，降低分布偏差
+    private val URL_REGEX   = Regex("https?://\\S+|www\\.\\S+", RegexOption.IGNORE_CASE)
+    private val EMAIL_REGEX = Regex("[\\w\\.-]+@[\\w\\.-]+\\.\\w+")
+    private val PHONE_REGEX = Regex("(?:\\+?\\d[\\d\\- ]{6,}\\d)")
+    private val CODE_REGEX  = Regex("\\b\\d{4,8}\\b")
+    private val TRACK_REGEX = Regex("\\b(?:SF|YT|ZTO|JD)\\w{6,}\\b", RegexOption.IGNORE_CASE)
+    private val ZH_REGEX    = Regex("[\\u4E00-\\u9FFF]+")
+
+    private fun preprocessForAscii(text: String): String {
+        var t = try { Normalizer.normalize(text, Normalizer.Form.NFKC) } catch (_: Throwable) { text }
+        t = URL_REGEX.replace(t, "<URL>")
+        t = EMAIL_REGEX.replace(t, "<EMAIL>")
+        t = PHONE_REGEX.replace(t, "<PHONE>")
+        t = TRACK_REGEX.replace(t, "<TRACK>")
+        t = CODE_REGEX.replace(t, "<CODE>")
+        t = ZH_REGEX.replace(t) { m ->
+            val src = m.value
+            val py = runCatching { com.brill.zero.util.PinyinUtil.toPinyin(src) }.getOrDefault("")
+            if (py.isNotBlank()) py else src.codePoints().toArray().joinToString(" ") { "U%04X".format(it) }
+        }
+        t = t.replace(Regex("\\s+"), " ").trim().lowercase()
+        return t
+    }
 
     // 动态构建选项：支持文件模型（已学习）与资产模型（原始）
     private fun createOptions(): TextClassifier.TextClassifierOptions? {
@@ -144,10 +169,10 @@ class PriorityClassifier(private val context: Context) {
         // Use ML model for classification
         if (useL1MediaPipe && modelAvailable && classifier != null) {
             try {
-                // 将输入文本转换为拼音以匹配端侧训练的数据分布
-                val pinyinText = com.brill.zero.util.PinyinUtil.toPinyin(fullText)
+                // 统一使用 AWE ASCII 预处理（URL/EMAIL/PHONE/CODE/TRACK + 中文转拼音/码点）
+                val aweText = preprocessForAscii(fullText)
                 val result: TextClassifierResult = classifyLock.withLock {
-                    classifier!!.classify(pinyinText)
+                    classifier!!.classify(aweText)
                 }
 
                 // Get the best classification result
