@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content xmlns:android="http://schemas.android.com/apk/res/android">
-    <exclude domain="database" path="/" />
+    <!-- Exclude the Room database file from backups to avoid migrating stale data -->
+    <exclude domain="database" path="zero.db" />
 </full-backup-content>
