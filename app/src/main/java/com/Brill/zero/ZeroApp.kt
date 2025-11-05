@@ -2,6 +2,9 @@ package com.brill.zero
 
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
@@ -21,5 +24,17 @@ class ZeroApp : Application() {
                 ExistingPeriodicWorkPolicy.KEEP,
                 work
             )
+
+        // Create notification channel for verification codes
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val mgr = getSystemService(NotificationManager::class.java)
+            val channel = NotificationChannel(
+                "codes",
+                "验证码提醒",
+                NotificationManager.IMPORTANCE_HIGH
+            )
+            channel.description = "用于显示验证码并提供复制按钮的通知"
+            mgr.createNotificationChannel(channel)
+        }
     }
 }

@@ -50,7 +50,7 @@ fun DashboardScreen(onNavigate: (String) -> Unit = {}) {
                 .padding(top = 8.dp, bottom = 12.dp)
         ) {
             Text(
-                "仪表盘",
+                "Dashboard",
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontFamily = vt323
                 ),
@@ -72,7 +72,7 @@ fun DashboardScreen(onNavigate: (String) -> Unit = {}) {
                 onClick = { onNavigate("todos") }
             )
             EntryBar(
-                text = "历史通知",
+                text = "History",
                 icon = { Icon(Icons.Outlined.History, contentDescription = null, tint = Color(0xFFE6E6E6), modifier = Modifier.size(32.dp)) },
                 fontFamily = vt323,
                 onClick = { onNavigate("history") }
@@ -84,7 +84,7 @@ fun DashboardScreen(onNavigate: (String) -> Unit = {}) {
                 onClick = { onNavigate("debug") }
             )
             EntryBar(
-                text = "设置",
+                text = "Settings",
                 icon = { Icon(Icons.Outlined.Settings, contentDescription = null, tint = Color(0xFFE6E6E6), modifier = Modifier.size(32.dp)) },
                 fontFamily = vt323,
                 onClick = { onNavigate("settings") }

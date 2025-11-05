@@ -17,6 +17,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.brill.zero.domain.model.Priority
 import com.brill.zero.settings.AppSettings
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import android.app.PendingIntent
+import com.brill.zero.R
 
 class L2L3ProcessWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
 
@@ -80,6 +84,34 @@ class L2L3ProcessWorker(appContext: Context, params: WorkerParameters) : Corouti
                         sourceNotificationKey = n.key
                     )
                 )
+                // 若是验证码意图，尝试提取验证码并发送通知，提供复制按钮
+                if (t.title.startsWith("验证码")) {
+                    val codeRegex = Regex("""(?!.*\b尾号\b.*)(\b[A-Z0-9]{4,8}\b)""")
+                    val code = codeRegex.find(listOfNotNull(n.title, n.text).joinToString(" · "))?.groupValues?.getOrNull(1)
+                        ?: codeRegex.find(t.title)?.groupValues?.getOrNull(1)
+                    if (!code.isNullOrBlank()) {
+                        val copyIntent = Intent(applicationContext, com.brill.zero.receiver.CopyCodeReceiver::class.java).apply {
+                            action = "com.brill.zero.ACTION_COPY_CODE"
+                            putExtra("code", code)
+                        }
+                        val piCopy = PendingIntent.getBroadcast(
+                            applicationContext,
+                            (System.currentTimeMillis() % Int.MAX_VALUE).toInt(),
+                            copyIntent,
+                            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                        )
+                        val builder = NotificationCompat.Builder(applicationContext, "codes")
+                            .setSmallIcon(R.mipmap.ic_launcher)
+                            .setContentTitle("验证码")
+                            .setContentText(code)
+                            .setStyle(NotificationCompat.BigTextStyle().bigText("验证码：$code"))
+                            .setPriority(NotificationCompat.PRIORITY_HIGH)
+                            .addAction(NotificationCompat.Action.Builder(0, "复制", piCopy).build())
+                            .setAutoCancel(true)
+                        NotificationManagerCompat.from(applicationContext)
+                            .notify((System.currentTimeMillis() % Int.MAX_VALUE).toInt(), builder.build())
+                    }
+                }
                 repo.markProcessed(listOf(n.id))
             }
             is L2ProcessResult.RequiresL3Slm -> {          // ✅ 新名字

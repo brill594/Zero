@@ -83,7 +83,7 @@ fun TodoScreen(onOpenDashboard: () -> Unit = {}) {
                     TextField(
                         value = manualText,
                         onValueChange = { manualText = it },
-                        placeholder = { Text("请输入一句描述，如：明早9点与张总对齐", color = Color(0xFFB3B3B3)) },
+                        placeholder = { Text("请输入一句描述", color = Color(0xFFB3B3B3)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(18.dp),
