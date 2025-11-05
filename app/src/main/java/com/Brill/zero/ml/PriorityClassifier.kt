@@ -51,7 +51,8 @@ class PriorityClassifier(private val context: Context) {
         t = CODE_REGEX.replace(t, "<CODE>")
         t = ZH_REGEX.replace(t) { m ->
             val src = m.value
-            val py = runCatching { com.brill.zero.util.PinyinUtil.toPinyin(src) }.getOrDefault("")
+            // 使用带单引号分隔的拼音音节以匹配训练（AWE）
+            val py = runCatching { com.brill.zero.util.PinyinUtil.toPinyinSyllables(src) }.getOrDefault("")
             if (py.isNotBlank()) py else src.codePoints().toArray().joinToString(" ") { "U%04X".format(it) }
         }
         t = t.replace(Regex("\\s+"), " ").trim().lowercase()

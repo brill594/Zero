@@ -47,7 +47,7 @@ fun DebugScreen(onOpenDashboard: () -> Unit = {}) {
     var gpuLayers by remember { mutableStateOf(0) }
     LaunchedEffect(gpuLayers) { slm.setGpuLayersOverride(gpuLayers) }
 
-    var input by remember { mutableStateOf("微信：明早9点和王总对齐下财务周报，下午取快递 取件码A8B3。") }
+    var input by remember { mutableStateOf("微信：明早9点和王总对齐下财务周报。") }
 
     var l1Out by remember { mutableStateOf<Priority?>(null) }
     var l1Time by remember { mutableStateOf<Long?>(null) }
