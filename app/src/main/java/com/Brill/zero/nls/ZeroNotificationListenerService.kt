@@ -45,7 +45,14 @@ class ZeroNotificationListenerService : NotificationListenerService() {
         val extras = sbn.notification.extras
         val title = extras.getCharSequence("android.title")?.toString()
         val text  = extras.getCharSequence("android.text")?.toString()
-        val full  = listOfNotNull(title, text).joinToString(" · ")
+        // 使用应用名称而非包名，作为 L1 输入的一部分（在标题/内容缺失时尤为重要）
+        val pm = applicationContext.packageManager
+        val appName = runCatching {
+            pm.getApplicationLabel(pm.getApplicationInfo(sbn.packageName, 0)).toString()
+        }.getOrElse { sbn.packageName }
+        val full  = listOfNotNull(appName, title, text)
+            .filter { it.isNotBlank() }
+            .joinToString(" · ")
 
         // 统一放到后台协程里：先做 L1 推理，再入库和入队
         scope.launch(Dispatchers.IO) {

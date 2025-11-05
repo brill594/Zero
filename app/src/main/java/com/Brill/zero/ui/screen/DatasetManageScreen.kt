@@ -21,6 +21,8 @@ import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Delete
 import com.brill.zero.data.datasets.L1DatasetLogger
+import com.brill.zero.worker.L1NightTrainWorker
+import com.brill.zero.settings.AppSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -40,6 +42,24 @@ fun DatasetManageScreen(onOpenSettings: () -> Unit = {}) {
     var lineCount by remember { mutableStateOf<Int?>(null) }
     var editorOpen by remember { mutableStateOf(false) }
     var last50 by remember { mutableStateOf<List<Pair<Int, String>>>(emptyList()) }
+    var progressEpoch by remember { mutableStateOf(0) }
+    var trainStartTs by remember { mutableStateOf(0L) }
+    var trainLastUpdateTs by remember { mutableStateOf(0L) }
+
+    // 安排夜间训练（一次性），由 Worker 内部约束充电+闲置
+    LaunchedEffect(Unit) {
+        runCatching { L1NightTrainWorker.scheduleNightly(context) }
+    }
+
+    // 简易轮询训练进度（SharedPreferences）
+    LaunchedEffect(Unit) {
+        while (true) {
+            progressEpoch = AppSettings.getL1TrainProgressEpoch(context)
+            trainStartTs = AppSettings.getL1TrainStartTs(context)
+            trainLastUpdateTs = AppSettings.getL1TrainLastUpdateTs(context)
+            kotlinx.coroutines.delay(500)
+        }
+    }
 
     LaunchedEffect(file) {
         withContext(Dispatchers.IO) {
@@ -150,6 +170,47 @@ fun DatasetManageScreen(onOpenSettings: () -> Unit = {}) {
                             }
                         }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF0000), contentColor = Color.White)) { Text("清空") }
                     }
+                }
+
+                // 训练进度（左） + 训练按钮（右）
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val progress = (progressEpoch.coerceIn(0, 80)) / 80f
+                    LinearProgressIndicator(
+                        progress = progress,
+                        modifier = Modifier.weight(1f).height(6.dp),
+                        color = Color(0xFF66CC66)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    val etaText = remember(progressEpoch, trainStartTs) {
+                        if (progressEpoch <= 0 || trainStartTs <= 0L) "预计剩余: --"
+                        else {
+                            val elapsed = System.currentTimeMillis() - trainStartTs
+                            val avgPerEpoch = elapsed.toDouble() / progressEpoch.toDouble()
+                            val remaining = (80 - progressEpoch).coerceAtLeast(0)
+                            val etaMs = (avgPerEpoch * remaining).toLong()
+                            val mins = etaMs / 60000
+                            val secs = (etaMs % 60000) / 1000
+                            "预计剩余: %02d:%02d".format(mins, secs)
+                        }
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text("当前 Epoch: ${progressEpoch}/80", color = Color(0xFF9E9E9E), style = MaterialTheme.typography.labelSmall)
+                        Text(etaText, color = Color(0xFF9E9E9E), style = MaterialTheme.typography.labelSmall)
+                    }
+                    Button(
+                        onClick = {
+                            scope.launch(Dispatchers.IO) {
+                                // 主动触发训练（忽略 gating）
+                                L1NightTrainWorker.enqueueNow(context, force = true)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3366FF))
+                    ) { Text("训练") }
                 }
             }
         }

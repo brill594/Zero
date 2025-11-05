@@ -22,33 +22,55 @@ class PriorityClassifier(private val context: Context) {
     private val useL1MediaPipe: Boolean = true
 
     private val modelAssetPath = "models/l1_gatekeeper_model.tflite"
+    @Volatile private var currentModelId: String? = null
 
     // 取消应用启动时的预加载，避免早期 JNI/资产管理并发导致崩溃
 
     private val labelMap = mapOf(
         "高优先级" to Priority.HIGH,
         "中优先级" to Priority.MEDIUM,
-        "低优先级" to Priority.LOW
+        "低优先级" to Priority.LOW,
+        "低优先级/垃圾" to Priority.LOW
     )
 
-    // 仅构造一次，避免频繁加载 native
-    private val options by lazy {
-        try {
-            Log.d("PriorityClassifier", "Creating model options for: $modelAssetPath")
-            // 资产快速校验：至少可读到一些字节，避免空文件/占位导致 native 崩溃
-            val ok = runCatching {
-                context.assets.open(modelAssetPath).use { buf ->
-                    val header = ByteArray(16)
-                    buf.read(header) > 0
+    // 动态构建选项：支持文件模型（已学习）与资产模型（原始）
+    private fun createOptions(): TextClassifier.TextClassifierOptions? {
+        return try {
+            val useLearned = com.brill.zero.settings.AppSettings.getUseLearnedL1(appContext)
+            val builder = BaseOptions.builder()
+                .setDelegate(Delegate.CPU)
+            val id: String
+            if (useLearned) {
+                val selected = com.brill.zero.settings.AppSettings.getL1SelectedModelPath(appContext)
+                val file = if (selected != null) java.io.File(selected) else java.io.File(appContext.noBackupFilesDir, "models/L1_learned.tflite")
+                if (!file.exists() || file.length() <= 0) {
+                    Log.w("PriorityClassifier", "Learned model missing; fallback to assets")
+                    builder.setModelAssetPath(modelAssetPath)
+                    id = "asset:$modelAssetPath"
+                } else {
+                    // MediaPipe Tasks BaseOptions does not provide setModelFilePath.
+                    // Load the model file into a ByteBuffer and supply via setModelAssetBuffer.
+                    val bytes = file.readBytes()
+                    val buffer = java.nio.ByteBuffer.allocateDirect(bytes.size)
+                    buffer.put(bytes)
+                    buffer.rewind()
+                    builder.setModelAssetBuffer(buffer)
+                    id = "file:${file.absolutePath}"
                 }
-            }.getOrDefault(false)
-            if (!ok) {
-                throw IllegalStateException("Asset unreadable or empty: $modelAssetPath")
+            } else {
+                // 资产快速校验：至少可读到一些字节
+                val ok = runCatching {
+                    context.assets.open(modelAssetPath).use { buf ->
+                        val header = ByteArray(16)
+                        buf.read(header) > 0
+                    }
+                }.getOrDefault(false)
+                if (!ok) throw IllegalStateException("Asset unreadable or empty: $modelAssetPath")
+                builder.setModelAssetPath(modelAssetPath)
+                id = "asset:$modelAssetPath"
             }
-            val base = BaseOptions.builder()
-                .setModelAssetPath(modelAssetPath)   // 直接用 assets
-                .setDelegate(Delegate.CPU)           // 显式使用 CPU 委托，避免 NNAPI/GPU 原生崩溃
-                .build()
+            val base = builder.build()
+            currentModelId = id
             TextClassifier.TextClassifierOptions.builder()
                 .setBaseOptions(base)
                 .build()
@@ -71,17 +93,16 @@ class PriorityClassifier(private val context: Context) {
                 return@withContext
             }
             classifyLock.withLock {
-                if (classifier == null && options != null) {
-                    Log.d("PriorityClassifier", "Loading L1 model from assets: $modelAssetPath")
-                    classifier = TextClassifier.createFromOptions(appContext, options!!)
+                if (classifier == null) {
+                    val opts = createOptions()
+                    if (opts == null) throw IllegalStateException("Model options null")
+                    Log.d("PriorityClassifier", "Loading L1 model: ${currentModelId}")
+                    classifier = TextClassifier.createFromOptions(appContext, opts)
                     modelAvailable = true
                     Log.d("PriorityClassifier", "L1 model loaded successfully")
                 }
             }
-            if (options == null) {
-                Log.e("PriorityClassifier", "Model options are null - cannot load model")
-                modelAvailable = false
-            }
+            
         } catch (e: Exception) {
             Log.e("PriorityClassifier", "Failed to load L1 model: ${e.message}", e)
             modelAvailable = false
@@ -95,11 +116,21 @@ class PriorityClassifier(private val context: Context) {
         // Ensure classifier is initialized
         if (useL1MediaPipe) {
             classifyLock.withLock {
-                if (classifier == null && options != null) {
+                // 若未初始化或模型选择已改变，重新加载
+                val desiredId = if (com.brill.zero.settings.AppSettings.getUseLearnedL1(appContext)) {
+                    val selected = com.brill.zero.settings.AppSettings.getL1SelectedModelPath(appContext)
+                    val file = if (selected != null) java.io.File(selected) else java.io.File(appContext.noBackupFilesDir, "models/L1_learned.tflite")
+                    "file:${file.absolutePath}"
+                } else {
+                    "asset:$modelAssetPath"
+                }
+                if (classifier == null || currentModelId != desiredId) {
                     try {
-                        classifier = TextClassifier.createFromOptions(appContext, options!!)
+                        val opts = createOptions()
+                        if (opts == null) throw IllegalStateException("Model options null")
+                        classifier = TextClassifier.createFromOptions(appContext, opts)
                         modelAvailable = true
-                        Log.d("PriorityClassifier", "Model initialized successfully")
+                        Log.d("PriorityClassifier", "Model initialized: $currentModelId")
                     } catch (e: Exception) {
                         Log.e("PriorityClassifier", "Failed to initialize model: ${e.message}")
                         modelAvailable = false
@@ -113,8 +144,10 @@ class PriorityClassifier(private val context: Context) {
         // Use ML model for classification
         if (useL1MediaPipe && modelAvailable && classifier != null) {
             try {
+                // 将输入文本转换为拼音以匹配端侧训练的数据分布
+                val pinyinText = com.brill.zero.util.PinyinUtil.toPinyin(fullText)
                 val result: TextClassifierResult = classifyLock.withLock {
-                    classifier!!.classify(fullText)
+                    classifier!!.classify(pinyinText)
                 }
 
                 // Get the best classification result
@@ -143,6 +176,7 @@ class PriorityClassifier(private val context: Context) {
         }
 
         // Fallback to keyword-based classification only if model fails
+        // 关键字回退仍使用原始中文文本，以保证可读性
         val fallbackPriority = classifyByKeywords(fullText)
         Log.w(
             "ZeroL1-MP",

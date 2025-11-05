@@ -19,7 +19,7 @@ import androidx.compose.material.icons.outlined.Settings
 import com.brill.zero.settings.AppSettings
 
 @Composable
-fun SettingsScreen(onOpenDashboard: () -> Unit = {}, onOpenDataset: () -> Unit = {}) {
+fun SettingsScreen(onOpenDashboard: () -> Unit = {}, onOpenDataset: () -> Unit = {}, onOpenModels: () -> Unit = {}) {
     val context = LocalContext.current
 
     val vt323 = remember(context) {
@@ -30,6 +30,7 @@ fun SettingsScreen(onOpenDashboard: () -> Unit = {}, onOpenDataset: () -> Unit =
     var batteryThreshold by remember { mutableStateOf(AppSettings.getBatteryThreshold(context)) }
     var l3Threads by remember { mutableStateOf(AppSettings.getL3Threads(context)) }
     val maxThreads = remember { Runtime.getRuntime().availableProcessors().coerceAtMost(8) }
+    var useLearned by remember { mutableStateOf(AppSettings.getUseLearnedL1(context)) }
 
     Column(
         modifier = Modifier
@@ -148,6 +149,69 @@ fun SettingsScreen(onOpenDashboard: () -> Unit = {}, onOpenDataset: () -> Unit =
                         modifier = Modifier.weight(1f)
                     )
                     Button(onClick = onOpenDataset, modifier = Modifier.weight(1f)) { Text("打开") }
+                }
+            }
+
+            // 本地训练模型管理
+            ElevatedCard(
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF1A1A1A)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Outlined.Settings, contentDescription = null, tint = Color(0xFFE6E6E6), modifier = Modifier.size(32.dp))
+                    Text(
+                        "本地训练模型管理",
+                        color = Color(0xFFE6E6E6),
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontSize = MaterialTheme.typography.titleMedium.fontSize * 1.2f,
+                            fontFamily = vt323
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(onClick = onOpenModels, modifier = Modifier.weight(1f)) { Text("打开") }
+                }
+            }
+
+            // L1 模型选择（原始 / 学习）
+            ElevatedCard(
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF1A1A1A)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Outlined.Settings, contentDescription = null, tint = Color(0xFFE6E6E6), modifier = Modifier.size(32.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "L1 模型选择",
+                            color = Color(0xFFE6E6E6),
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontSize = MaterialTheme.typography.titleMedium.fontSize * 1.2f,
+                                fontFamily = vt323
+                            )
+                        )
+                        val sub = if (useLearned) "已使用: L1_learned.tflite" else "已使用: 原始内置模型"
+                        Text(sub, color = Color(0xFF9E9E9E), style = MaterialTheme.typography.labelSmall)
+                    }
+                    Switch(
+                        checked = useLearned,
+                        onCheckedChange = { v ->
+                            useLearned = v
+                            AppSettings.setUseLearnedL1(context, v)
+                        }
+                    )
                 }
             }
         }

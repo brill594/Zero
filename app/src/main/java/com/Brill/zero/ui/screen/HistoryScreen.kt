@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Label
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextAlign
 import com.brill.zero.data.datasets.L1DatasetLogger
@@ -43,7 +44,8 @@ fun HistoryScreen(onOpenDashboard: () -> Unit = {}) {
             .fillMaxSize()
             .padding(horizontal = 16.dp)
     ) {
-        // 顶部：左上角菜单按钮 + 居中标题
+        // 顶部：左上角菜单按钮 + 居中标题 + 右侧清空按钮
+        var clearDialogOpen by remember { mutableStateOf(false) }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -58,6 +60,30 @@ fun HistoryScreen(onOpenDashboard: () -> Unit = {}) {
                 color = androidx.compose.ui.graphics.Color(0xFFE6E6E6),
                 textAlign = TextAlign.Center,
                 modifier = Modifier.align(Alignment.Center)
+            )
+            IconButton(onClick = { clearDialogOpen = true }, modifier = Modifier.align(Alignment.CenterEnd)) {
+                Icon(Icons.Outlined.Delete, contentDescription = "清空历史通知")
+            }
+        }
+
+        if (clearDialogOpen) {
+            AlertDialog(
+                onDismissRequest = { clearDialogOpen = false },
+                title = { Text("清空历史通知") },
+                text = { Text("是否清空所有通知记录？该操作不可撤销。") },
+                confirmButton = {
+                    val scope = rememberCoroutineScope()
+                    val repo = remember { ZeroRepository.get(ctx) }
+                    TextButton(onClick = {
+                        scope.launch {
+                            repo.clearAllNotifications()
+                            clearDialogOpen = false
+                        }
+                    }) { Text("清空") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { clearDialogOpen = false }) { Text("取消") }
+                }
             )
         }
 
@@ -114,7 +140,9 @@ private fun NotificationRow(n: com.brill.zero.data.db.NotificationEntity) {
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 DropdownMenuItem(text = { Text("高优先级") }, onClick = {
                     menuOpen = false
-                    val full = listOfNotNull(n.title, n.text).joinToString(" : ")
+                    val pm = ctx.packageManager
+                    val appName = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(n.pkg, 0)).toString() }.getOrNull() ?: n.pkg
+                    val full = listOfNotNull(appName, n.title, n.text).filter { it.isNotBlank() }.joinToString(" : ")
                     scope.launch {
                         repo.setNotificationUserPriority(n.id, Priority.HIGH.name)
                         L1DatasetLogger.append(ctx, full.ifBlank { "(无内容)" }, "高优先级")
@@ -122,7 +150,9 @@ private fun NotificationRow(n: com.brill.zero.data.db.NotificationEntity) {
                 })
                 DropdownMenuItem(text = { Text("中优先级") }, onClick = {
                     menuOpen = false
-                    val full = listOfNotNull(n.title, n.text).joinToString(" : ")
+                    val pm = ctx.packageManager
+                    val appName = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(n.pkg, 0)).toString() }.getOrNull() ?: n.pkg
+                    val full = listOfNotNull(appName, n.title, n.text).filter { it.isNotBlank() }.joinToString(" : ")
                     scope.launch {
                         repo.setNotificationUserPriority(n.id, Priority.MEDIUM.name)
                         L1DatasetLogger.append(ctx, full.ifBlank { "(无内容)" }, "中优先级")
@@ -130,11 +160,18 @@ private fun NotificationRow(n: com.brill.zero.data.db.NotificationEntity) {
                 })
                 DropdownMenuItem(text = { Text("低优先级") }, onClick = {
                     menuOpen = false
-                    val full = listOfNotNull(n.title, n.text).joinToString(" : ")
+                    val pm = ctx.packageManager
+                    val appName = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(n.pkg, 0)).toString() }.getOrNull() ?: n.pkg
+                    val full = listOfNotNull(appName, n.title, n.text).filter { it.isNotBlank() }.joinToString(" : ")
                     scope.launch {
                         repo.setNotificationUserPriority(n.id, Priority.LOW.name)
                         L1DatasetLogger.append(ctx, full.ifBlank { "(无内容)" }, "低优先级")
                     }
+                })
+                Divider()
+                DropdownMenuItem(text = { Text("删除此通知") }, onClick = {
+                    menuOpen = false
+                    scope.launch { repo.deleteNotification(n.id) }
                 })
             }
         }

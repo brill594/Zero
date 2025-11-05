@@ -15,6 +15,7 @@ import com.brill.zero.ui.screen.TodoScreen
 import com.brill.zero.ui.screen.HistoryScreen
 import com.brill.zero.ui.screen.SettingsScreen
 import com.brill.zero.ui.screen.DatasetManageScreen
+import com.brill.zero.ui.screen.ModelManageScreen
 import com.brill.zero.BuildConfig
 import com.brill.zero.debug.DebugScreen
 import androidx.compose.animation.slideInHorizontally
@@ -107,6 +108,12 @@ fun ZeroNavGraph(startDestination: String = "todos") {
                         launchSingleTop = true
                         restoreState = true
                     }
+                }, onOpenModels = {
+                    nav.navigate("models") {
+                        popUpTo(nav.graph.startDestinationId) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
                 })
             }
             composable(
@@ -115,8 +122,24 @@ fun ZeroNavGraph(startDestination: String = "todos") {
                 exitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
                 popEnterTransition = { slideInHorizontally(initialOffsetX = { it }) },
                 popExitTransition = { slideOutHorizontally(targetOffsetX = { -it }) }
+        ) {
+            DatasetManageScreen(onOpenSettings = {
+                nav.navigate("settings") {
+                    popUpTo(nav.graph.startDestinationId) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            })
+        }
+
+            composable(
+                route = "models",
+                enterTransition = { slideInHorizontally(initialOffsetX = { -it }) },
+                exitTransition = { slideOutHorizontally(targetOffsetX = { it }) },
+                popEnterTransition = { slideInHorizontally(initialOffsetX = { it }) },
+                popExitTransition = { slideOutHorizontally(targetOffsetX = { -it }) }
             ) {
-                DatasetManageScreen(onOpenSettings = {
+                ModelManageScreen(onBack = {
                     nav.navigate("settings") {
                         popUpTo(nav.graph.startDestinationId) { saveState = true }
                         launchSingleTop = true

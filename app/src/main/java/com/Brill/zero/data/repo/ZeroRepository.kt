@@ -57,6 +57,14 @@ class ZeroRepository private constructor(private val db: ZeroDatabase, private v
     suspend fun setNotificationUserPriority(id: Long, userPriority: String?) = withContext(Dispatchers.IO) {
         db.notificationDao().setUserPriority(id, userPriority)
     }
+
+    suspend fun deleteNotification(id: Long) = withContext(Dispatchers.IO) {
+        db.notificationDao().deleteById(id)
+    }
+
+    suspend fun clearAllNotifications() = withContext(Dispatchers.IO) {
+        db.notificationDao().clearAll()
+    }
     companion object {
         @Volatile private var INSTANCE: ZeroRepository? = null
         fun get(context: Context): ZeroRepository = INSTANCE ?: synchronized(this) {
