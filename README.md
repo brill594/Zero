@@ -70,9 +70,13 @@
 **Settings（设置）**（`ui/screen/SettingsScreen.kt`）
 - 配置电量阈值、L3 线程数；选择 L1 使用原始/学习模型。
 - 跳转到数据集管理与模型管理。
+- L1 融合判断：启用后对 TFLite 与 Naive Bayes 进行融合；可调 TFLite 权重（NB 权重自动为 1 − TFLite）。
+- 默认：融合关闭、权重 0.5/0.5；阈值 MP=0.70、NB=0.70。
+- 调试：查看日志 `ZeroL1-MP`、`ZeroL1-NB`、`ZeroL1-Fusion`。
 - 需要配图：
   - 设置页总览 → `docs/images/settings_main.png`
   - L1 模型选择与开关 → `docs/images/settings_l1_model.png`
+  - L1 融合判断设置 → `docs/images/settings_l1_fusion.png`
 
 **Dataset 管理**（`ui/screen/DatasetManageScreen.kt`）
 - 管理 `L1.csv`：展示大小与行数；导出、编辑（最近 50 行）、清空数据集。
@@ -107,8 +111,10 @@
 ## 模型与处理器（L1/L2/L3）
 - L1 门卫（`ml/PriorityClassifier.kt`）：
   - 基于 MediaPipe `TextClassifier`（CPU delegate），将通知分类为 HIGH/MEDIUM/LOW。
-  - 文本预处理：`preprocessForAscii` 替换 URL/Email/Phone/Code/运单号，并将中文转为拼音或码点以匹配 AWE 训练。
+  - 文本统一预处理：`L1TextPreprocessor.asciiNormalizeForL1` 执行 NFKC 规范化、URL/Email/Phone/Code/运单号占位替换、空白压缩与小写化，并将中文转为拼音或码点；训练（CSV 合并）与推理一致。
   - 动态加载模型：优先本地学习模型（如存在且启用），否则使用 assets 模型；失败时关键词回退。
+  - 融合判断（可配置）：支持选择 JSON（Naive Bayes）模型并与 MediaPipe 融合；当融合开启时，若 MP 置信度≥0.70 直接采用，否则若 NB 置信度≥0.70 采用，否则按用户权重（默认 0.5/0.5）对三类分布加权融合；当融合关闭且选择 JSON，仅使用 NB。
+  - 模型加载修正：选择 JSON 时，MediaPipe 资产模型可作为回退以支持融合初始化。
   - 需要配图：
     - L1 分类示意（文本→优先级）→ `docs/images/l1_classifier.png`
 - L2 意图（`ml/NlpProcessor.kt`）：
@@ -134,6 +140,7 @@
   - 占位 worker（No‑Op），设计用于设备空闲/充电/夜间的 on‑device 训练或标注导出。
 - `L1NightTrainWorker.kt`：
   - 夜间/强制训练 L1：合并数据集、写训练请求、记录进度（0..80）。
+  - 合并 CSV 时使用统一文本预处理（`L1TextPreprocessor`），确保与推理一致。
   - 训练完成若准确率≥90%，采用 `L1_learned.tflite` 并更新设置与度量文件。
 - 需要配图：
   - 训练进度与采用流程图 → `docs/images/training_flow.png`
