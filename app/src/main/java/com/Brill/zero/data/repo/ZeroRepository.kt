@@ -48,6 +48,11 @@ class ZeroRepository private constructor(private val db: ZeroDatabase, private v
         notifyWidgets()
     }
 
+    suspend fun updateTodoTitleAndDueAt(id: Long, title: String, dueAt: Long?) = withContext(Dispatchers.IO) {
+        db.todoDao().setTitleAndDueAt(id, title, dueAt)
+        notifyWidgets()
+    }
+
     suspend fun getNextOpenTodo(): TodoEntity? = withContext(Dispatchers.IO) {
         db.todoDao().getNextOpen()
     }

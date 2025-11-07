@@ -106,11 +106,22 @@ fun ModelManageScreen(onBack: () -> Unit = {}) {
 private data class ModelItem(val file: File, val name: String, val size: Long, val accuracy: Double?)
 
 private fun listModelsWithMetrics(dir: File): List<ModelItem> {
-    val files = dir.listFiles { f -> f.isFile && f.name.endsWith(".tflite") }?.sortedByDescending { it.lastModified() } ?: emptyList()
+    val files = dir.listFiles { f ->
+        f.isFile && (
+            f.name.endsWith(".tflite") ||
+            (f.name.endsWith(".json") && !f.name.contains("metrics", ignoreCase = true))
+        )
+    }?.sortedByDescending { it.lastModified() } ?: emptyList()
+
     return files.map { f ->
-        val metricsFile = File(dir, f.nameWithoutExtension + ".metrics.json")
+        // 优先同名 .metrics.json，其次目录下的 metrics.json
+        val metricsCandidates = listOf(
+            File(dir, f.nameWithoutExtension + ".metrics.json"),
+            File(dir, "metrics.json")
+        )
+        val metricsFile = metricsCandidates.firstOrNull { it.exists() }
         val acc = runCatching {
-            if (metricsFile.exists()) JSONObject(metricsFile.readText()).optDouble("accuracy", Double.NaN) else Double.NaN
+            metricsFile?.let { JSONObject(it.readText()).optDouble("accuracy", Double.NaN) } ?: Double.NaN
         }.getOrDefault(Double.NaN)
         ModelItem(file = f, name = f.name, size = f.length(), accuracy = if (acc.isNaN()) null else acc)
     }

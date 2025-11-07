@@ -129,9 +129,9 @@ fun TodoScreen(onOpenDashboard: () -> Unit = {}) {
                                     )
                                 )
 
-                                // 若需要截止时间：后台运行 L3，仅提取 due time → 更新条目
-                                val intentsRequiringDue = setOf("日程提醒", "工作沟通")
-                                if (intentLabel != null && intentLabel in intentsRequiringDue) {
+                            // 若需要截止时间或期望摘要：后台运行 L3，返回后更新标题与截止时间
+                                val intentsRequiringDueOrSummary = setOf("日程提醒", "工作沟通")
+                                if (intentLabel != null && intentLabel in intentsRequiringDueOrSummary) {
                                     processingIds = processingIds + id
                                     // 启动 23 秒倒计时（每 100ms 更新一次，提前完成则直接置满）
                                     scope.launch {
@@ -146,8 +146,13 @@ fun TodoScreen(onOpenDashboard: () -> Unit = {}) {
                                         }
                                     }
                                     val out = withContext(Dispatchers.Default) { slm.process(text, intentLabel) }
-                                    val dueEpoch = out?.dueAt
-                                    repo.updateTodoDueAt(id, dueEpoch)
+                                    if (out != null) {
+                                        // 同步更新标题 + 截止时间（参考 debug：JNI 返回为空时使用 Stub 也会给到 summary/due）
+                                        repo.updateTodoTitleAndDueAt(id, out.title, out.dueAt)
+                                    } else {
+                                        // 保底：仅更新时间，标题保持原始手动输入
+                                        repo.updateTodoDueAt(id, null)
+                                    }
                                     // 完成后直接置满进度并移除处理标记
                                     processingProgress = processingProgress + (id to 1f)
                                     processingIds = processingIds - id

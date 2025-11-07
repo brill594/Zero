@@ -1,29 +1,14 @@
 # Zero
 
-一个在本地端智能地分流与提取通知的 Android 应用：
+一个在本地端智能地分流与提取通知的 Android ToDo APP：
 - L1 门卫（优先级）模型：将通知分为 HIGH / MEDIUM / LOW
 - L2 意图分类（MediaPipe）：识别验证码、未接来电、财务变动、物流信息、工作沟通、日程提醒等
 - L3-B 小语言模型（SLM，经 llama.cpp JNI）：从复杂通知中抽取意图、摘要与截止时间（JSON）
 - 将重要通知转化为待办（To‑Do），并提供桌面小部件快速浏览与标记完成
 
-本 README 详尽说明：功能概览、架构与数据流、资源与构建、使用指南，并明确已完成/未完成项，以及需要配图的位置与拍摄建议。
 
-**建议先看**：Dashboard 首屏的权限提示与入口、To‑Do 列表与手动添加、History 分类列表、Settings 配置项、Dataset/Model 管理、桌面 To‑Do 小部件。
 
-## 目录
-- 项目概览与目标
-- 快速开始（构建与运行）
-- 功能与界面
-- 架构与数据流
-- 模型与处理器（L1/L2/L3）
-- 后台任务与训练流程
-- 权限与系统集成
-- 数据存储与持久化
-- 资源与资产（assets/grammar/models/datasets/fonts）
-- 桌面小部件（Widgets）
-- 截图与配图清单（需要配图）
-- 已完成 / 未完成 & 路线图
-- 常见问题与限制
+**Dashboard 首屏的权限提示与入口、To‑Do 列表与手动添加、History 分类列表、Settings 配置项、Dataset/Model 管理、桌面 To‑Do 小部件。**
 
 ## 项目概览与目标
 - 目标：在本地端侧高效、可靠地处理通知，智能分流与抽取关键信息，转化为待办事项，尽量减少打扰与噪音。
@@ -49,23 +34,21 @@
 ## 功能与界面
 
 **Dashboard**（`ui/screen/DashboardScreen.kt`）
+
 - 展示主要入口：To‑Do、History、Debug、Settings。
+
 - 若未授予通知监听权限，显著提示并提供跳转设置页入口。
-- 需要配图：
-  - Dashboard 首屏（含权限提示）→ `docs/images/dashboard_permission.png`
+
+  ![1](pngs/1.png)
 
 **To‑Do 列表**（`ui/screen/TodoScreen.kt`）
 - 显示待办列表，支持手动添加（含意图识别与截止时间抽取）。
 - 显示处理中进度（当通知触发 L2/L3），支持标记完成、设置到期。
-- 需要配图：
-  - 待办列表（含“手动添加”入口）→ `docs/images/todo_list.png`
-  - “手动添加”面板与 NLP 识别过程 → `docs/images/todo_manual_add.png`
+- ![2](pngs/2.png)
 
 **History（历史）**（`ui/screen/HistoryScreen.kt`）
 - 分类显示通知：高/中/低优先级；支持清空、改标签、删除。
 - 列表项含 App 图标、名称、标题与正文，提供下拉菜单操作。
-- 需要配图：
-  - 历史列表（含分类标签与菜单）→ `docs/images/history_list.png`
 
 **Settings（设置）**（`ui/screen/SettingsScreen.kt`）
 - 配置电量阈值、L3 线程数；选择 L1 使用原始/学习模型。
@@ -92,8 +75,6 @@
 
 **Debug（调试）**（`ui/screen/DebugScreen.kt`，若存在）
 - 调试入口，便于查看 L2/L3 识别情况与线程覆盖等。
-- 需要配图：
-  - Debug 页面（如有）→ `docs/images/debug_screen.png`
 
 ## 架构与数据流
 - 入口与导航：
@@ -105,30 +86,30 @@
   - HIGH/MEDIUM 优先级分别进入 `ProcessIncomingNotification` 或 `WorkManager` 的后台处理。
   - L2 分流：可 Regex 即时处理（验证码/未接来电），或交由 L3‑B SLM 解析复杂意图。
   - 抽取到的待办写入 `Room`，并刷新桌面 To‑Do 小部件。
-- 需要配图：
-  - 数据流示意图（L1→L2→L3→DB→UI→Widget）→ `docs/images/arch_flow.png`
 
 ## 模型与处理器（L1/L2/L3）
 - L1 门卫（`ml/PriorityClassifier.kt`）：
   - 基于 MediaPipe `TextClassifier`（CPU delegate），将通知分类为 HIGH/MEDIUM/LOW。
+  
   - 文本统一预处理：`L1TextPreprocessor.asciiNormalizeForL1` 执行 NFKC 规范化、URL/Email/Phone/Code/运单号占位替换、空白压缩与小写化，并将中文转为拼音或码点；训练（CSV 合并）与推理一致。
+  
   - 动态加载模型：优先本地学习模型（如存在且启用），否则使用 assets 模型；失败时关键词回退。
+  
   - 融合判断（可配置）：支持选择 JSON（Naive Bayes）模型并与 MediaPipe 融合；当融合开启时，若 MP 置信度≥0.70 直接采用，否则若 NB 置信度≥0.70 采用，否则按用户权重（默认 0.5/0.5）对三类分布加权融合；当融合关闭且选择 JSON，仅使用 NB。
+  
   - 模型加载修正：选择 JSON 时，MediaPipe 资产模型可作为回退以支持融合初始化。
-  - 需要配图：
-    - L1 分类示意（文本→优先级）→ `docs/images/l1_classifier.png`
+  
+    
+  
 - L2 意图（`ml/NlpProcessor.kt`）：
   - 使用 MediaPipe TextClassifier 识别意图。
   - L3‑A 正则引擎：对“验证码”“未接来电”即时处理并生成待办或通知复制按钮。
   - L3‑B 分流：对“工作沟通”“日程提醒”“社交闲聊”“财务变动”“物流信息”交由 SLM。
-  - 需要配图：
-    - L2 意图分流示意（类别→处理路径）→ `docs/images/l2_router.png`
+  
 - L3‑B SLM（`ml/L3_SLM_Processor.kt` + `cpp/llama_jni.cpp`）：
   - 通过 JNI 调用 `llama.cpp`，按 ChatML prompt + GBNF 语法生成严格 JSON（`intent`, `summary`, `due_time`）。
   - 内置超时与回退：JNI 失败或输出非 JSON 时，回退到规则/猜测。
   - 可覆盖线程数与 GPU 层（默认 CPU-only，GPU 根据设备探测）。
-  - 需要配图：
-    - SLM 提取示意（文本→JSON）→ `docs/images/l3_slm_json.png`
 
 ## 后台任务与训练流程
 - `L2L3ProcessWorker.kt`：
@@ -142,8 +123,6 @@
   - 夜间/强制训练 L1：合并数据集、写训练请求、记录进度（0..80）。
   - 合并 CSV 时使用统一文本预处理（`L1TextPreprocessor`），确保与推理一致。
   - 训练完成若准确率≥90%，采用 `L1_learned.tflite` 并更新设置与度量文件。
-- 需要配图：
-  - 训练进度与采用流程图 → `docs/images/training_flow.png`
 
 ## 权限与系统集成
 - Manifest：
@@ -198,7 +177,7 @@
 - UI 切换/动画建议录制短动图（GIF/MP4），并在 README 以静帧替代或提供链接。
 - 文件/架构图可用 Draw.io/Figma 绘制，统一配色与布局。
 
-## 已完成 / 未完成 & 路线图
+## 已完成 / 未完成 
 
 已完成
 - 通知监听与存储：捕获并去重保存（`ZeroNotificationListenerService` + Room）。

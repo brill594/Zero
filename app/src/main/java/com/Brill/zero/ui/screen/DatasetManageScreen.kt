@@ -210,7 +210,7 @@ fun DatasetManageScreen(onOpenSettings: () -> Unit = {}) {
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3366FF))
-                    ) { Text("训练") }
+                    ) { Text("训练（NB）") }
                 }
             }
         }
