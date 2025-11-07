@@ -81,7 +81,7 @@ class L2L3ProcessWorker(appContext: Context, params: WorkerParameters) : Corouti
                         dueAt = t.dueAt,
                         createdAt = System.currentTimeMillis(),
                         status = "OPEN",
-                        sourceNotificationKey = n.key
+                        sourceNotificationKey = res.intent
                     )
                 )
                 // 若是验证码意图，尝试提取验证码并发送通知，提供复制按钮
@@ -129,7 +129,7 @@ class L2L3ProcessWorker(appContext: Context, params: WorkerParameters) : Corouti
                             dueAt = t.dueAt,
                             createdAt = System.currentTimeMillis(),
                             status = "OPEN",
-                            sourceNotificationKey = n.key
+                            sourceNotificationKey = res.intent
                         )
                     )
                 }

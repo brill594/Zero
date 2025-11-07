@@ -46,7 +46,7 @@ class ProcessIncomingNotification(private val context: Context) {
                             dueAt = t.dueAt,
                             createdAt = System.currentTimeMillis(),
                             status = "OPEN",
-                            sourceNotificationKey = key
+                            sourceNotificationKey = res.intent
                         )
                     )
                     todoCreated = true
@@ -60,7 +60,7 @@ class ProcessIncomingNotification(private val context: Context) {
                                 dueAt = t.dueAt,
                                 createdAt = System.currentTimeMillis(),
                                 status = "OPEN",
-                                sourceNotificationKey = key
+                                sourceNotificationKey = res.intent
                             )
                         )
                         todoCreated = true

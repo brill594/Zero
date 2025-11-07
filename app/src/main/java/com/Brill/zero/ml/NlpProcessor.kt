@@ -12,7 +12,7 @@ import kotlin.concurrent.withLock
 
 // 结果类型（命名去下划线）
 sealed class L2ProcessResult {
-    data class Handled(val todo: Todo) : L2ProcessResult()
+    data class Handled(val todo: Todo, val intent: String) : L2ProcessResult()
     data class RequiresL3Slm(val intent: String) : L2ProcessResult()
     object Ignore : L2ProcessResult()
 }
@@ -26,7 +26,7 @@ class NlpProcessor(context: Context) {
     private val modelPath = "models/l2_processor_intent.tflite"
 
     // L3-B (SLM)
-    val l3SlmProcessor: L3_SLM_Processor = L3_SLM_Processor(context)
+    val l3SlmProcessor: L3_SLM_Processor = SlmRuntime.obtain(context)
 
     // 意图集合
     private val L3_REGEX_INTENTS = setOf("验证码", "未接来电")
@@ -81,7 +81,7 @@ class NlpProcessor(context: Context) {
         // L3-A：可正则立即处理
         if (intent in L3_REGEX_INTENTS) {
             val todo = runL3RegExEngine(fullText, intent)
-            return todo?.let { L2ProcessResult.Handled(it) } ?: L2ProcessResult.Ignore
+            return todo?.let { L2ProcessResult.Handled(it, intent) } ?: L2ProcessResult.Ignore
         }
 
         // L3-B：需要小模型 SLM 批处理

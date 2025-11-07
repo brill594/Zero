@@ -63,7 +63,7 @@ class MediumPriorityWorker(
                             dueAt = t.dueAt,        // ✅ 字段名没变
                             createdAt = System.currentTimeMillis(),
                             status = "OPEN",
-                            sourceNotificationKey = n.key
+                            sourceNotificationKey = res.intent
                         )
                     )
                     processedIds.add(n.id)
@@ -77,7 +77,7 @@ class MediumPriorityWorker(
                                 dueAt = t.dueAt,
                                 createdAt = System.currentTimeMillis(),
                                 status = "OPEN",
-                                sourceNotificationKey = n.key
+                                sourceNotificationKey = res.intent
                             )
                         )
                     }

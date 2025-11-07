@@ -31,7 +31,7 @@ class BatchProcessMediumPriority(private val context: Context) {
                             dueAt = t.dueAt,
                             createdAt = System.currentTimeMillis(),
                             status = "OPEN",
-                            sourceNotificationKey = n.key
+                            sourceNotificationKey = res.intent
                         )
                     )
                     created++
@@ -45,7 +45,7 @@ class BatchProcessMediumPriority(private val context: Context) {
                                 dueAt = t.dueAt,
                                 createdAt = System.currentTimeMillis(),
                                 status = "OPEN",
-                                sourceNotificationKey = n.key
+                                sourceNotificationKey = res.intent
                             )
                         )
                         created++

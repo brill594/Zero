@@ -8,6 +8,9 @@ interface NotificationDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(item: NotificationEntity): Long
 
+    @Query("SELECT * FROM notifications WHERE key = :key LIMIT 1")
+    suspend fun getByKey(key: String): NotificationEntity?
+
     @Query("SELECT * FROM notifications WHERE COALESCE(userPriority, priority) = :p ORDER BY postedAt DESC LIMIT :limit")
     fun streamByPriority(p: String, limit: Int = 50): Flow<List<NotificationEntity>>
 

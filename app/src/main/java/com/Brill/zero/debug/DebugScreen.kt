@@ -47,7 +47,7 @@ fun DebugScreen(onOpenDashboard: () -> Unit = {}) {
     var gpuLayers by remember { mutableStateOf(0) }
     LaunchedEffect(gpuLayers) { slm.setGpuLayersOverride(gpuLayers) }
 
-    var input by remember { mutableStateOf("微信：明早9点和王总对齐下财务周报。") }
+    var input by remember { mutableStateOf("【携程旅行】航班动态提醒：您预订的 CA1832 北京-上海 航班计划于今天 19:35 起飞，请您合理安排时间，提前到达机场办理登机手续。") }
 
     var l1Out by remember { mutableStateOf<Priority?>(null) }
     var l1Time by remember { mutableStateOf<Long?>(null) }

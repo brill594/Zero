@@ -14,6 +14,9 @@ object AppSettings {
     private const val KEY_L1_SELECTED_MODEL_PATH = "l1_selected_model_path"
     private const val KEY_L1_TRAIN_START_TS = "l1_train_start_ts"
     private const val KEY_L1_TRAIN_LAST_UPDATE_TS = "l1_train_last_update_ts"
+    private const val KEY_L1_FUSION_ENABLED = "l1_fusion_enabled"
+    private const val KEY_L1_FUSION_W_MP = "l1_fusion_weight_mp"
+    private const val KEY_L1_FUSION_W_NB = "l1_fusion_weight_nb"
 
     private fun prefs(ctx: Context): SharedPreferences =
         ctx.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -90,5 +93,28 @@ object AppSettings {
 
     fun setL1TrainLastUpdateTs(ctx: Context, ts: Long) {
         prefs(ctx).edit().putLong(KEY_L1_TRAIN_LAST_UPDATE_TS, ts).apply()
+    }
+
+    // ---- L1 融合（TFLite + 朴素贝叶斯）设置 ----
+    fun getL1FusionEnabled(ctx: Context): Boolean =
+        prefs(ctx).getBoolean(KEY_L1_FUSION_ENABLED, false)
+
+    fun setL1FusionEnabled(ctx: Context, enabled: Boolean) {
+        prefs(ctx).edit().putBoolean(KEY_L1_FUSION_ENABLED, enabled).apply()
+    }
+
+    fun getL1FusionWeightMP(ctx: Context): Float =
+        prefs(ctx).getFloat(KEY_L1_FUSION_W_MP, 0.5f)
+
+    fun getL1FusionWeightNB(ctx: Context): Float =
+        prefs(ctx).getFloat(KEY_L1_FUSION_W_NB, 0.5f)
+
+    fun setL1FusionWeights(ctx: Context, wMp: Float, wNb: Float) {
+        val mp = wMp.coerceIn(0f, 1f)
+        val nb = wNb.coerceIn(0f, 1f)
+        prefs(ctx).edit()
+            .putFloat(KEY_L1_FUSION_W_MP, mp)
+            .putFloat(KEY_L1_FUSION_W_NB, nb)
+            .apply()
     }
 }

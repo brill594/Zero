@@ -9,11 +9,13 @@ import android.os.PowerManager
 import android.util.Log
 import androidx.work.*
 import com.brill.zero.data.datasets.L1DatasetLogger
+import com.brill.zero.ml.L1NaiveBayes
 import com.brill.zero.settings.AppSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import com.brill.zero.ml.L1TextPreprocessor
 import java.io.File
 import java.io.FileOutputStream
 import java.security.MessageDigest
@@ -64,6 +66,18 @@ class L1NightTrainWorker(appContext: Context, params: WorkerParameters) : Corout
         // 写训练请求（供外部脚本发现并执行）
         writeTrainingRequest(trainDir)
 
+        // 端侧训练（朴素贝叶斯）：导出到 gatekeeper_export
+        runCatching {
+            val exportDir = File(trainDir, "gatekeeper_export")
+            val res = L1NaiveBayes.trainAndExport(ctx, outTrain, outTest, exportDir)
+            if (res != null) {
+                val (acc, modelFile) = res
+                Log.i(TAG, "On-device NB trained: acc=${"%.3f".format(acc)} model=${modelFile.name}")
+            } else {
+                Log.w(TAG, "On-device NB training skipped: train csv empty")
+            }
+        }.onFailure { e -> Log.w(TAG, "On-device NB training failed: ${e.message}", e) }
+
         // 记录训练开始时间，供 UI 预计剩余时间计算
         AppSettings.setL1TrainStartTs(ctx, System.currentTimeMillis())
 
@@ -75,39 +89,62 @@ class L1NightTrainWorker(appContext: Context, params: WorkerParameters) : Corout
         }
 
         // 读取导出结果并判断是否采用
-        val exportDir = File(trainDir, "gatekeeper_export")
-        val modelTflite = File(exportDir, "model.tflite")
-        val metricsJson = File(exportDir, "metrics.json")
-        if (modelTflite.exists() && metricsJson.exists()) {
-            runCatching {
-                val acc = JSONObject(metricsJson.readText()).optDouble("accuracy", 0.0)
-                Log.i(TAG, "Retrain accuracy: %.4f (%.2f%%)".format(acc, acc * 100.0))
-                if (acc >= 0.90) {
+        // 兼容两种导出目录：gatekeeper_export（推荐）与 Awe 脚本默认的 awe_export_ascii
+        val candidateDirs = listOf(
+            File(trainDir, "gatekeeper_export"),
+            File(trainDir, "awe_export_ascii")
+        )
+        var adopted = false
+        for (dir in candidateDirs) {
+            val metricsJson = File(dir, "metrics.json")
+            val acc = runCatching {
+                if (metricsJson.exists()) JSONObject(metricsJson.readText()).optDouble("accuracy", 0.0) else {
+                    Log.w(TAG, "metrics.json missing in ${dir.name}; adopting without accuracy gate")
+                    1.0
+                }
+            }.getOrElse { 0.0 }
+
+            // 优先采用 TFLite，其次 JSON（朴素贝叶斯）
+            val modelTflite = File(dir, "model.tflite")
+            val modelJson = File(dir, "model_nb.json")
+
+            if (modelTflite.exists() && acc >= 0.90) {
+                runCatching {
                     val dstModelDir = File(ctx.noBackupFilesDir, "models").apply { mkdirs() }
                     val dstModel = File(dstModelDir, "L1_learned.tflite")
                     modelTflite.inputStream().use { `in` ->
                         FileOutputStream(dstModel).use { out -> `in`.copyTo(out) }
                     }
-                    // 同步保存指标文件，便于在本地模型管理中展示准确率
-                    runCatching {
+                    if (metricsJson.exists()) {
                         val dstMetrics = File(dstModelDir, "L1_learned.metrics.json")
                         metricsJson.inputStream().use { `in` ->
                             FileOutputStream(dstMetrics).use { out -> `in`.copyTo(out) }
                         }
-                    }.onFailure { e -> Log.w(TAG, "Copy metrics failed: ${e.message}") }
-                    // 采用新模型
+                    }
                     AppSettings.setUseLearnedL1(ctx, true)
                     AppSettings.setL1SelectedModelPath(ctx, dstModel.absolutePath)
                     AppSettings.setL1LastDatasetSig(ctx, sig)
-                    Log.i(TAG, "Learned model adopted (>=90%): ${dstModel.absolutePath}")
-                } else {
-                    Log.i(TAG, "Accuracy below threshold (<90%); not adopting")
-                }
-            }.onFailure { e ->
-                Log.e(TAG, "Adopt failed: ${e.message}", e)
+                    Log.i(TAG, "Learned TFLite adopted: ${dstModel.absolutePath}")
+                    adopted = true
+                }.onFailure { e -> Log.e(TAG, "Adopt TFLite failed: ${e.message}", e) }
+            } else if (modelJson.exists() && acc >= 0.90) {
+                // 朴素贝叶斯 JSON 模型直接使用原路径（无需复制二进制）
+                AppSettings.setUseLearnedL1(ctx, true)
+                AppSettings.setL1SelectedModelPath(ctx, modelJson.absolutePath)
+                AppSettings.setL1LastDatasetSig(ctx, sig)
+                Log.i(TAG, "Learned NB adopted: ${modelJson.absolutePath}")
+                adopted = true
+            } else {
+                Log.i(TAG, "Accuracy below threshold (<90%) or model missing in ${dir.name}")
             }
+            if (adopted) break
+        }
+        if (!adopted) {
+            Log.w(TAG, "Export artifacts not found or below threshold; model not adopted")
         } else {
-            Log.w(TAG, "Export artifacts not found; model not adopted")
+            // 清理/重置进度，避免 UI 长期停留在 80/80
+            AppSettings.setL1TrainProgressEpoch(ctx, 0)
+            AppSettings.setL1TrainLastUpdateTs(ctx, System.currentTimeMillis())
         }
 
         Result.success()
@@ -194,8 +231,8 @@ class L1NightTrainWorker(appContext: Context, params: WorkerParameters) : Corout
                     val pair = parseTwoCols(line)
                     if (pair != null) {
                         val (origText, label) = pair
-                        val pinyin = com.brill.zero.util.PinyinUtil.toPinyin(origText)
-                        val outLine = "${escape(pinyin)},${escape(label)}\n"
+                        val ascii = L1TextPreprocessor.asciiNormalizeForL1(origText)
+                        val outLine = "${escape(ascii)},${escape(label)}\n"
                         out.appendText(outLine)
                     } else {
                         Log.w(TAG, "Skip malformed CSV asset line")
@@ -216,8 +253,8 @@ class L1NightTrainWorker(appContext: Context, params: WorkerParameters) : Corout
                     if (label.isBlank()) return@runCatching
                     // 归一化 label 到 CSV 体系（JSONL 可能用 "低优先级/垃圾"）
                     if (label == "低优先级/垃圾") label = "低优先级"
-                    val pinyin = com.brill.zero.util.PinyinUtil.toPinyin(text)
-                    val line = "${escape(pinyin)},${escape(label)}\n"
+                    val ascii = L1TextPreprocessor.asciiNormalizeForL1(text)
+                    val line = "${escape(ascii)},${escape(label)}\n"
                     outTrain.appendText(line)
                     outTest.appendText(line)
                 }.onFailure { e -> Log.w(TAG, "Skip bad jsonl: ${e.message}") }

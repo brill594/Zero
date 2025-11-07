@@ -18,7 +18,17 @@ class ZeroRepository private constructor(private val db: ZeroDatabase, private v
 
 
     suspend fun saveNotification(n: NotificationEntity) = withContext(Dispatchers.IO) {
-        db.notificationDao().upsert(n)
+        val existing = db.notificationDao().getByKey(n.key)
+        val toSave = if (existing != null) {
+            // 保持同一通知的稳定 id，更新内容与优先级；保留用户手动设定的优先级/处理状态
+            existing.copy(
+                title = n.title,
+                text = n.text,
+                postedAt = n.postedAt,
+                priority = n.priority
+            )
+        } else n
+        db.notificationDao().upsert(toSave)
     }
 
 

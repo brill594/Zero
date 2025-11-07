@@ -1,4 +1,5 @@
 package com.brill.zero.nls
+import android.app.Notification
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OutOfQuotaPolicy
 import androidx.work.workDataOf
@@ -42,6 +43,14 @@ class ZeroNotificationListenerService : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
+        // 忽略常驻/不可清除的通知（例如音乐播放、网络速度等），避免每次更新都触发处理导致高频入库与排队
+        val flags = sbn.notification.flags
+        val isOngoing = sbn.isOngoing ||
+                (flags and Notification.FLAG_ONGOING_EVENT) != 0 ||
+                (flags and Notification.FLAG_FOREGROUND_SERVICE) != 0 ||
+                !sbn.isClearable
+        if (isOngoing) return
+
         val extras = sbn.notification.extras
         val title = extras.getCharSequence("android.title")?.toString()
         val text  = extras.getCharSequence("android.text")?.toString()

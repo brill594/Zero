@@ -31,6 +31,9 @@ fun SettingsScreen(onOpenDashboard: () -> Unit = {}, onOpenDataset: () -> Unit =
     var l3Threads by remember { mutableStateOf(AppSettings.getL3Threads(context)) }
     val maxThreads = remember { Runtime.getRuntime().availableProcessors().coerceAtMost(8) }
     var useLearned by remember { mutableStateOf(AppSettings.getUseLearnedL1(context)) }
+    var fusionEnabled by remember { mutableStateOf(AppSettings.getL1FusionEnabled(context)) }
+    var fusionWeightMp by remember { mutableStateOf(AppSettings.getL1FusionWeightMP(context)) }
+    val fusionWeightNb = remember(fusionWeightMp) { 1f - fusionWeightMp }
 
     Column(
         modifier = Modifier
@@ -212,6 +215,91 @@ fun SettingsScreen(onOpenDashboard: () -> Unit = {}, onOpenDataset: () -> Unit =
                             AppSettings.setUseLearnedL1(context, v)
                         }
                     )
+                }
+            }
+
+            // L1 融合（TFLite + 朴素贝叶斯）
+            ElevatedCard(
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF1A1A1A)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Outlined.Settings, contentDescription = null, tint = Color(0xFFE6E6E6), modifier = Modifier.size(32.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "L1 模型融合 (TFLite + NB)",
+                                color = Color(0xFFE6E6E6),
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontSize = MaterialTheme.typography.titleMedium.fontSize * 1.2f,
+                                    fontFamily = vt323
+                                )
+                            )
+                            val sub = if (fusionEnabled) "已开启融合，权重 MP=${"%.2f".format(fusionWeightMp)} NB=${"%.2f".format(fusionWeightNb)}"
+                            else "未开启融合"
+                            Text(sub, color = Color(0xFF9E9E9E), style = MaterialTheme.typography.labelSmall)
+                        }
+                        Switch(
+                            checked = fusionEnabled,
+                            onCheckedChange = { v ->
+                                fusionEnabled = v
+                                AppSettings.setL1FusionEnabled(context, v)
+                            }
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Column(Modifier.fillMaxWidth()) {
+                        Text(
+                            "权重设置",
+                            color = Color(0xFFE6E6E6),
+                            style = MaterialTheme.typography.titleSmall.copy(fontFamily = vt323)
+                        )
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("MP", color = Color(0xFF9E9E9E))
+                            Slider(
+                                value = fusionWeightMp,
+                                onValueChange = { v ->
+                                    fusionWeightMp = v.coerceIn(0f, 1f)
+                                    AppSettings.setL1FusionWeights(context, fusionWeightMp, 1f - fusionWeightMp)
+                                },
+                                enabled = fusionEnabled,
+                                valueRange = 0f..1f,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                text = "${"%.2f".format(fusionWeightMp)}",
+                                color = Color(0xFF9E9E9E)
+                            )
+                        }
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("NB", color = Color(0xFF9E9E9E))
+                            LinearProgressIndicator(
+                                progress = fusionWeightNb,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Text(
+                                text = "${"%.2f".format(fusionWeightNb)}",
+                                color = Color(0xFF9E9E9E)
+                            )
+                        }
+                    }
                 }
             }
         }

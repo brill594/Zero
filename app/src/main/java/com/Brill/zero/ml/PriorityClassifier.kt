@@ -9,6 +9,9 @@ import com.google.mediapipe.tasks.core.Delegate
 import com.google.mediapipe.tasks.text.textclassifier.TextClassifier
 import com.google.mediapipe.tasks.text.textclassifier.TextClassifierResult
 import com.google.mediapipe.tasks.components.containers.Category
+import com.brill.zero.ml.L1NaiveBayes
+import com.brill.zero.ml.L1TextPreprocessor
+import java.io.File
 import java.text.Normalizer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,29 +37,9 @@ class PriorityClassifier(private val context: Context) {
         "低优先级/垃圾" to Priority.LOW
     )
 
-    // AWE ASCII 预处理：与训练保持一致，降低分布偏差
-    private val URL_REGEX   = Regex("https?://\\S+|www\\.\\S+", RegexOption.IGNORE_CASE)
-    private val EMAIL_REGEX = Regex("[\\w\\.-]+@[\\w\\.-]+\\.\\w+")
-    private val PHONE_REGEX = Regex("(?:\\+?\\d[\\d\\- ]{6,}\\d)")
-    private val CODE_REGEX  = Regex("\\b\\d{4,8}\\b")
-    private val TRACK_REGEX = Regex("\\b(?:SF|YT|ZTO|JD)\\w{6,}\\b", RegexOption.IGNORE_CASE)
-    private val ZH_REGEX    = Regex("[\\u4E00-\\u9FFF]+")
-
+    // 统一 AWE ASCII 预处理：与训练保持一致
     private fun preprocessForAscii(text: String): String {
-        var t = try { Normalizer.normalize(text, Normalizer.Form.NFKC) } catch (_: Throwable) { text }
-        t = URL_REGEX.replace(t, "<URL>")
-        t = EMAIL_REGEX.replace(t, "<EMAIL>")
-        t = PHONE_REGEX.replace(t, "<PHONE>")
-        t = TRACK_REGEX.replace(t, "<TRACK>")
-        t = CODE_REGEX.replace(t, "<CODE>")
-        t = ZH_REGEX.replace(t) { m ->
-            val src = m.value
-            // 使用带单引号分隔的拼音音节以匹配训练（AWE）
-            val py = runCatching { com.brill.zero.util.PinyinUtil.toPinyinSyllables(src) }.getOrDefault("")
-            if (py.isNotBlank()) py else src.codePoints().toArray().joinToString(" ") { "U%04X".format(it) }
-        }
-        t = t.replace(Regex("\\s+"), " ").trim().lowercase()
-        return t
+        return L1TextPreprocessor.asciiNormalizeForL1(text)
     }
 
     // 动态构建选项：支持文件模型（已学习）与资产模型（原始）
@@ -68,20 +51,28 @@ class PriorityClassifier(private val context: Context) {
             val id: String
             if (useLearned) {
                 val selected = com.brill.zero.settings.AppSettings.getL1SelectedModelPath(appContext)
-                val file = if (selected != null) java.io.File(selected) else java.io.File(appContext.noBackupFilesDir, "models/L1_learned.tflite")
-                if (!file.exists() || file.length() <= 0) {
-                    Log.w("PriorityClassifier", "Learned model missing; fallback to assets")
+                val isJson = selected?.lowercase()?.endsWith(".json") == true
+                if (isJson) {
+                    // 防御：若选择的是 JSON（NB）模型，则始终回退到资产 TFLite
+                    Log.w("PriorityClassifier", "Selected JSON model; fallback to asset TFLite for MediaPipe")
                     builder.setModelAssetPath(modelAssetPath)
                     id = "asset:$modelAssetPath"
                 } else {
-                    // MediaPipe Tasks BaseOptions does not provide setModelFilePath.
-                    // Load the model file into a ByteBuffer and supply via setModelAssetBuffer.
-                    val bytes = file.readBytes()
-                    val buffer = java.nio.ByteBuffer.allocateDirect(bytes.size)
-                    buffer.put(bytes)
-                    buffer.rewind()
-                    builder.setModelAssetBuffer(buffer)
-                    id = "file:${file.absolutePath}"
+                    val file = if (selected != null) java.io.File(selected) else java.io.File(appContext.noBackupFilesDir, "models/L1_learned.tflite")
+                    if (!file.exists() || file.length() <= 0) {
+                        Log.w("PriorityClassifier", "Learned model missing; fallback to assets")
+                        builder.setModelAssetPath(modelAssetPath)
+                        id = "asset:$modelAssetPath"
+                    } else {
+                        // MediaPipe Tasks BaseOptions does not provide setModelFilePath.
+                        // Load the model file into a ByteBuffer and supply via setModelAssetBuffer.
+                        val bytes = file.readBytes()
+                        val buffer = java.nio.ByteBuffer.allocateDirect(bytes.size)
+                        buffer.put(bytes)
+                        buffer.rewind()
+                        builder.setModelAssetBuffer(buffer)
+                        id = "file:${file.absolutePath}"
+                    }
                 }
             } else {
                 // 资产快速校验：至少可读到一些字节
@@ -108,6 +99,7 @@ class PriorityClassifier(private val context: Context) {
 
     @Volatile private var classifier: TextClassifier? = null
     @Volatile private var modelAvailable = false
+    @Volatile private var nbModel: L1NaiveBayes.Model? = null
     private val classifyLock = ReentrantLock()
 
     /** 可选：提前加载，放到 IO 线程 */
@@ -128,7 +120,6 @@ class PriorityClassifier(private val context: Context) {
                     Log.d("PriorityClassifier", "L1 model loaded successfully")
                 }
             }
-            
         } catch (e: Exception) {
             Log.e("PriorityClassifier", "Failed to load L1 model: ${e.message}", e)
             modelAvailable = false
@@ -139,27 +130,41 @@ class PriorityClassifier(private val context: Context) {
     suspend fun predictPriority(fullText: String): Priority = withContext(Dispatchers.IO) {
         val start = SystemClock.elapsedRealtime()
 
-        // Ensure classifier is initialized
+        // Ensure classifier is initialized（或 NB 模型准备好）
         if (useL1MediaPipe) {
             classifyLock.withLock {
-                // 若未初始化或模型选择已改变，重新加载
-                val desiredId = if (com.brill.zero.settings.AppSettings.getUseLearnedL1(appContext)) {
-                    val selected = com.brill.zero.settings.AppSettings.getL1SelectedModelPath(appContext)
-                    val file = if (selected != null) java.io.File(selected) else java.io.File(appContext.noBackupFilesDir, "models/L1_learned.tflite")
-                    "file:${file.absolutePath}"
+                val useLearned = com.brill.zero.settings.AppSettings.getUseLearnedL1(appContext)
+                val selected = com.brill.zero.settings.AppSettings.getL1SelectedModelPath(appContext)
+                val isJson = useLearned && selected?.lowercase()?.endsWith(".json") == true
+
+                if (isJson) {
+                    val path = selected ?: return@withLock
+                    val desiredId = "nb:$path"
+                    if (currentModelId != desiredId || nbModel == null) {
+                        nbModel = L1NaiveBayes.loadModel(File(path))
+                        currentModelId = desiredId
+                        Log.d("PriorityClassifier", "NB model loaded: $path")
+                    }
+                    classifier = null
+                    modelAvailable = false
                 } else {
-                    "asset:$modelAssetPath"
-                }
-                if (classifier == null || currentModelId != desiredId) {
-                    try {
-                        val opts = createOptions()
-                        if (opts == null) throw IllegalStateException("Model options null")
-                        classifier = TextClassifier.createFromOptions(appContext, opts)
-                        modelAvailable = true
-                        Log.d("PriorityClassifier", "Model initialized: $currentModelId")
-                    } catch (e: Exception) {
-                        Log.e("PriorityClassifier", "Failed to initialize model: ${e.message}")
-                        modelAvailable = false
+                    val desiredId = if (useLearned) {
+                        val file = if (selected != null) File(selected) else File(appContext.noBackupFilesDir, "models/L1_learned.tflite")
+                        "file:${file.absolutePath}"
+                    } else {
+                        "asset:$modelAssetPath"
+                    }
+                    if (classifier == null || currentModelId != desiredId) {
+                        try {
+                            val opts = createOptions()
+                            if (opts == null) throw IllegalStateException("Model options null")
+                            classifier = TextClassifier.createFromOptions(appContext, opts)
+                            modelAvailable = true
+                            Log.d("PriorityClassifier", "Model initialized: $currentModelId")
+                        } catch (e: Exception) {
+                            Log.e("PriorityClassifier", "Failed to initialize model: ${e.message}")
+                            modelAvailable = false
+                        }
                     }
                 }
             }
@@ -167,37 +172,136 @@ class PriorityClassifier(private val context: Context) {
             modelAvailable = false
         }
 
-        // Use ML model for classification
+        val useLearned = com.brill.zero.settings.AppSettings.getUseLearnedL1(appContext)
+        val selected = com.brill.zero.settings.AppSettings.getL1SelectedModelPath(appContext)
+        val isJson = useLearned && selected?.lowercase()?.endsWith(".json") == true
+        val fusionEnabled = com.brill.zero.settings.AppSettings.getL1FusionEnabled(appContext)
+        var wMp = com.brill.zero.settings.AppSettings.getL1FusionWeightMP(appContext)
+        var wNb = com.brill.zero.settings.AppSettings.getL1FusionWeightNB(appContext)
+        val wSum = (wMp + wNb).coerceAtLeast(1e-6f)
+        wMp = wMp / wSum
+        wNb = wNb / wSum
+        // 若选择了 JSON（NB）模型，按需加载 NB，同时保持 MediaPipe（资产或学习）用于融合
+        if (isJson) {
+            classifyLock.withLock {
+                val path = selected
+                if (path != null) {
+                    val desiredId = "nb:$path"
+                    if (currentModelId != desiredId || nbModel == null) {
+                        nbModel = L1NaiveBayes.loadModel(File(path))
+                        currentModelId = desiredId
+                        Log.d("PriorityClassifier", "NB model loaded: $path")
+                    }
+                }
+                // 确保 MediaPipe 可用（createOptions 会在 JSON 时回退资产模型）
+                if (fusionEnabled && (classifier == null || !modelAvailable)) {
+                    try {
+                        val opts = createOptions()
+                        if (opts != null) {
+                            classifier = TextClassifier.createFromOptions(appContext, opts)
+                            modelAvailable = true
+                        }
+                    } catch (e: Exception) {
+                        Log.e("PriorityClassifier", "MediaPipe init failed for fusion: ${e.message}")
+                        modelAvailable = false
+                    }
+                }
+            }
+        }
+
+        // 统一预处理文本（供两个模型）
+        val aweText = preprocessForAscii(fullText)
+
+        var mpBestName: String? = null
+        var mpBestScore: Float = 0f
+        var mpDist: FloatArray? = null
         if (useL1MediaPipe && modelAvailable && classifier != null) {
             try {
-                // 统一使用 AWE ASCII 预处理（URL/EMAIL/PHONE/CODE/TRACK + 中文转拼音/码点）
-                val aweText = preprocessForAscii(fullText)
-                val result: TextClassifierResult = classifyLock.withLock {
-                    classifier!!.classify(aweText)
+                val result: TextClassifierResult = classifyLock.withLock { classifier!!.classify(aweText) }
+                val cats = result.classificationResult().classifications().firstOrNull()?.categories() ?: emptyList()
+                // 将 MediaPipe 输出按标签名聚合到三类分布
+                val labelOrder = listOf("高优先级", "中优先级", "低优先级")
+                val dist = FloatArray(labelOrder.size)
+                for (c in cats) {
+                    val name = c.categoryName()
+                    val idx = labelOrder.indexOf(name)
+                    if (idx >= 0) dist[idx] += c.score()
                 }
-
-                // Get the best classification result
-                val best: Category? = result
-                    .classificationResult()
-                    .classifications()
-                    .firstOrNull()
-                    ?.categories()
-                    ?.maxByOrNull { it.score() }
-
-                val categoryName = best?.categoryName()
-                val mapped = labelMap[categoryName] ?: Priority.LOW
-
-                Log.d(
-                    "ZeroL1-MP",
-                    "L1 预测: '${categoryName ?: "N/A"}' " +
-                            "(score=${"%.2f".format(best?.score() ?: 0f)}) -> $mapped " +
-                            "(${SystemClock.elapsedRealtime() - start}ms)"
-                )
-                return@withContext mapped
+                // 归一化
+                val sum = dist.sum()
+                if (sum > 0f) {
+                    for (i in dist.indices) dist[i] = dist[i] / sum
+                }
+                mpDist = dist
+                val bestIdx = dist.indices.maxByOrNull { dist[it] } ?: -1
+                if (bestIdx >= 0) {
+                    mpBestName = labelOrder[bestIdx]
+                    mpBestScore = dist[bestIdx]
+                }
+                Log.d("ZeroL1-MP", "MP分布=${dist.joinToString(",") { "%.2f".format(it) }} best=${mpBestName}(${"%.2f".format(mpBestScore)})")
             } catch (e: Exception) {
                 Log.e("PriorityClassifier", "Model classification failed: ${e.message}", e)
                 modelAvailable = false
-                // Continue to fallback
+            }
+        }
+
+        var nbBestName: String? = null
+        var nbBestScore: Double = 0.0
+        var nbDist: DoubleArray? = null
+        if (nbModel != null) {
+            try {
+                val p = L1NaiveBayes.proba(nbModel!!, aweText)
+                nbDist = p
+                val idx = (p.indices.maxByOrNull { p[it] } ?: 0)
+                nbBestName = nbModel!!.labels[idx]
+                nbBestScore = p[idx]
+                Log.d("ZeroL1-NB", "NB分布=${p.joinToString(",") { "%.2f".format(it) }} best=${nbBestName}(${"%.2f".format(nbBestScore)})")
+            } catch (e: Exception) {
+                Log.e("PriorityClassifier", "NB classification failed: ${e.message}", e)
+            }
+        }
+
+        val mpThreshold = 0.70f
+        val nbThreshold = 0.70
+        val labelOrder = listOf("高优先级", "中优先级", "低优先级")
+
+        // 若未开启融合：
+        if (!fusionEnabled) {
+            if (isJson && nbBestName != null) {
+                val mapped = labelMap[nbBestName] ?: Priority.LOW
+                Log.d("ZeroL1-Fusion", "融合关闭，使用NB: ${nbBestName}")
+                return@withContext mapped
+            }
+            if (mpBestName != null) {
+                val mapped = labelMap[mpBestName] ?: Priority.LOW
+                Log.d("ZeroL1-Fusion", "融合关闭，使用MP: ${mpBestName}")
+                return@withContext mapped
+            }
+        } else {
+            // 开启融合：优先高置信度，否则加权融合
+            if (mpBestName != null && mpBestScore >= mpThreshold) {
+                val mapped = labelMap[mpBestName] ?: Priority.LOW
+                Log.d("ZeroL1-Fusion", "采用MP: ${mpBestName} (${"%.2f".format(mpBestScore)})")
+                return@withContext mapped
+            }
+            if (nbBestName != null && nbBestScore >= nbThreshold) {
+                val mapped = labelMap[nbBestName] ?: Priority.LOW
+                Log.d("ZeroL1-Fusion", "采用NB: ${nbBestName} (${"%.2f".format(nbBestScore)})")
+                return@withContext mapped
+            }
+            if ((mpDist != null) || (nbDist != null)) {
+                val fused = DoubleArray(labelOrder.size) { 0.0 }
+                if (mpDist != null) {
+                    for (i in fused.indices) fused[i] += wMp.toDouble() * mpDist[i].toDouble()
+                }
+                if (nbDist != null) {
+                    for (i in fused.indices) fused[i] += wNb.toDouble() * nbDist[i]
+                }
+                val bestIdx = fused.indices.maxByOrNull { fused[it] } ?: 2
+                val bestName = labelOrder[bestIdx]
+                val mapped = labelMap[bestName] ?: Priority.LOW
+                Log.d("ZeroL1-Fusion", "加权融合(${"%.2f".format(wMp)}:${"%.2f".format(wNb)}): ${bestName} (${"%.2f".format(fused[bestIdx])})")
+                return@withContext mapped
             }
         }
 

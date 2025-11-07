@@ -15,6 +15,12 @@ import java.util.regex.Pattern
  * - 若尚未集成，则 fallback 为 Stub（保持当前可运行）
  */
 class L3_SLM_Processor(private val context: Context) {
+    // 共享 JNI 句柄与方法缓存，支持预加载与延后释放
+    @Volatile private var jniHandle: Long? = null
+    @Volatile private var mInit: java.lang.reflect.Method? = null
+    @Volatile private var mCompletion: java.lang.reflect.Method? = null
+    @Volatile private var mFree: java.lang.reflect.Method? = null
+    private val slmLock = java.util.concurrent.locks.ReentrantLock()
     private val grammarAssetPath = "Grammar/json_ie.gbnf"
 
     // 懒加载并缓存 GBNF 文本；读取失败返回 null（会自动 fallback）
@@ -108,45 +114,54 @@ class L3_SLM_Processor(private val context: Context) {
                 "<|im_start|>user\n$userText<|im_end|>\n" +
                 "<|im_start|>assistant\n"
 
+    private fun ensureJniReflection() {
+        if (mInit != null && mCompletion != null && mFree != null) return
+        val clazz = Class.forName("com.brill.zero.llama.Llama")
+        mInit = clazz.getMethod(
+            "nativeInit",
+            String::class.java, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType
+        )
+        mCompletion = clazz.getMethod(
+            "nativeCompletion",
+            java.lang.Long.TYPE, String::class.java, String::class.java,
+            Int::class.javaPrimitiveType, Float::class.javaPrimitiveType, Float::class.javaPrimitiveType, Int::class.javaPrimitiveType
+        )
+        mFree = clazz.getMethod("nativeFree", java.lang.Long.TYPE)
+    }
+
     private fun tryRunViaJNI(prompt: String, maxNewTokens: Int = 48): String? {
         return try {
-            // 通过反射调用：com.Brill.zero.llama.Llama（若未集成会抛异常→ fallback）
-            val clazz = Class.forName("com.brill.zero.llama.Llama")
-            val mInit = clazz.getMethod(
-                "nativeInit",
-                String::class.java, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType
-            )
-            val mCompletion = clazz.getMethod(
-                "nativeCompletion",
-                java.lang.Long.TYPE, String::class.java, String::class.java,
-                Int::class.javaPrimitiveType, Float::class.javaPrimitiveType, Float::class.javaPrimitiveType, Int::class.javaPrimitiveType
-            )
-            val mFree = clazz.getMethod("nativeFree", java.lang.Long.TYPE)
-
+            ensureJniReflection()
             val modelPath = ensureLocalModelPath()
-            // 默认线程改为 4；UI 可通过 setThreadsOverride 覆盖
             val defaultThreads = 4
             val threads = (threadsOverride ?: defaultThreads).coerceAtMost(8)
-            // 缩小上下文窗口以提升推理速度（提示词约 200 tokens 足够）
-            // Vulkan/其他 GPU 后端可用时，传递非零 nGpuLayers 以尽可能将层卸载到 GPU
-            // 默认保守：0（CPU-only）；UI 可通过 setGpuLayersOverride(value) 打开 GPU 卸载
             val nGpuLayers = (gpuLayersOverride ?: 0)
-            val handle = mInit.invoke(null, modelPath, 2048, nGpuLayers, threads) as Long
-            // 启用 GBNF 语法：强约束仅输出一个 JSON 对象
-            val g = grammarText
-            Log.d("ZeroL3-SLM", "JNI 调用：启用语法=${g != null}, maxNewTokens=$maxNewTokens, threads=$threads (override=${threadsOverride}), nGpuLayers=$nGpuLayers (override=${gpuLayersOverride})")
-            val out = mCompletion.invoke(
-                null,
-                handle,
-                prompt,
-                g,                           // ← 传入语法文本；为 null 时原生自动关闭语法采样
-                maxNewTokens,
-                0f,                          // temperature（0 表示贪婪）
-                1.0f,                        // top-p（1 表示禁用）
-                42
-            ) as String
 
-            mFree.invoke(null, handle)
+            // 临时关闭句柄复用：每次调用都创建新上下文，避免第二次调用时 KV 缓存/会话状态未清导致的 llama_decode 失败
+            val handle = mInit!!.invoke(null, modelPath, 2048, nGpuLayers, threads) as Long
+            val shared = false
+
+            val g = grammarText
+            Log.d("ZeroL3-SLM", "JNI 调用：启用语法=${g != null}, maxNewTokens=$maxNewTokens, threads=$threads (override=${threadsOverride}), nGpuLayers=$nGpuLayers (override=${gpuLayersOverride}), shared=$shared")
+
+            slmLock.lock()
+            val out = try {
+                mCompletion!!.invoke(
+                    null,
+                    handle,
+                    prompt,
+                    g,
+                    maxNewTokens,
+                    0f,
+                    1.0f,
+                    42
+                ) as String
+            } finally {
+                slmLock.unlock()
+                // 每次调用后都释放上下文，保证下一次是干净会话
+                runCatching { mFree!!.invoke(null, handle) }
+            }
+
             val cleaned = out.trim()
             if (cleaned.isEmpty()) {
                 Log.w("ZeroL3-SLM", "JNI 返回空字符串")
@@ -200,6 +215,8 @@ class L3_SLM_Processor(private val context: Context) {
      * @param l2_intent L2 的预测意图（用于一致性校验）
      */
     fun process(text: String, l2_intent: String): Todo? {
+        // 标记使用，避免后台空闲误释放
+        try { SlmRuntime.markUseStart() } catch (_: Throwable) {}
         Log.i("ZeroL3-SLM", "L3-B 调用：intent='$l2_intent'")
         val finalPrompt = buildChatMLPrompt(text)
 
@@ -207,7 +224,7 @@ class L3_SLM_Processor(private val context: Context) {
         val rawOutput = tryRunViaJNIWithTimeout(finalPrompt)
 
         // 解析 JSON（若失败则回退 Stub）
-        return try {
+        val result = try {
             val cleanJson = rawOutput?.let { extractJson(it) } ?: run {
                 if (rawOutput == null) {
                     Log.w("ZeroL3-SLM", "JNI 返回为空或失败，使用 Stub")
@@ -239,7 +256,39 @@ class L3_SLM_Processor(private val context: Context) {
         } catch (e: Exception) {
             Log.e("ZeroL3-SLM", "JSON 解析失败: ${e.message}")
             null
+        } finally {
+            try { SlmRuntime.markUseEnd() } catch (_: Throwable) {}
         }
+        return result
+    }
+
+    /** 预加载：初始化并持有原生句柄，后续推理复用 */
+    fun preload(): Boolean {
+        return try {
+            ensureJniReflection()
+            if (jniHandle != null) {
+                true
+            } else {
+                val modelPath = ensureLocalModelPath()
+                val defaultThreads = 4
+                val threads = (threadsOverride ?: defaultThreads).coerceAtMost(8)
+                val nGpuLayers = (gpuLayersOverride ?: 0)
+                jniHandle = mInit!!.invoke(null, modelPath, 2048, nGpuLayers, threads) as Long
+                Log.i("ZeroL3-SLM", "预加载完成，threads=$threads, nGpuLayers=$nGpuLayers")
+                true
+            }
+        } catch (t: Throwable) {
+            Log.w("ZeroL3-SLM", "预加载失败（将使用 Stub）: ${t.message}")
+            false
+        }
+    }
+
+    /** 释放：释放原生句柄以降内存 */
+    fun release() {
+        val h = jniHandle ?: return
+        runCatching { mFree?.invoke(null, h) }
+        jniHandle = null
+        Log.i("ZeroL3-SLM", "SLM 已释放")
     }
 
     // —— 解析器：从模型输出或原文中提取 JSON —— //

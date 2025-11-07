@@ -8,6 +8,7 @@ import android.os.Build
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import com.brill.zero.ml.SlmRuntime
 import com.brill.zero.worker.NightlyTrainingWorker
 import java.util.concurrent.TimeUnit
 
@@ -15,6 +16,8 @@ import java.util.concurrent.TimeUnit
 class ZeroApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        // 初始化 SLM 运行时（前台预热，后台空闲释放）
+        runCatching { SlmRuntime.init(this) }
 // Schedule nightly training if not already scheduled
         val work = PeriodicWorkRequestBuilder<NightlyTrainingWorker>(1, TimeUnit.DAYS)
             .build()
