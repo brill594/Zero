@@ -42,7 +42,7 @@
   ![1](pngs/1.png)
 
 **To‑Do 列表**（`ui/screen/TodoScreen.kt`）
-- 显示待办列表，支持手动添加（含意图识别与截止时间抽取）。
+- 显示待办列表，支持手动添加（含意图识别与截止时间抽取；L3 解析成功或回退时会同步更新摘要与到期时间）。
 - 显示处理中进度（当通知触发 L2/L3），支持标记完成、设置到期。
 - ![2](pngs/2.png)
 
@@ -51,27 +51,27 @@
 - 列表项含 App 图标、名称、标题与正文，提供下拉菜单操作。
 
 **Settings（设置）**（`ui/screen/SettingsScreen.kt`）
-- 配置电量阈值、L3 线程数；选择 L1 使用原始/学习模型。
-- 跳转到数据集管理与模型管理。
+- 配置电量阈值、L3 线程数；跳转到数据集管理与模型管理。
+- 注：已移除设置页中的“L1 模型选择”卡片，改由“模型管理”页统一开关与选择。
 - L1 融合判断：启用后对 TFLite 与 Naive Bayes 进行融合；可调 TFLite 权重（NB 权重自动为 1 − TFLite）。
 - 默认：融合关闭、权重 0.5/0.5；阈值 MP=0.70、NB=0.70。
 - 调试：查看日志 `ZeroL1-MP`、`ZeroL1-NB`、`ZeroL1-Fusion`。
 - 需要配图：
   - 设置页总览 → `docs/images/settings_main.png`
-  - L1 模型选择与开关 → `docs/images/settings_l1_model.png`
   - L1 融合判断设置 → `docs/images/settings_l1_fusion.png`
 
 **Dataset 管理**（`ui/screen/DatasetManageScreen.kt`）
 - 管理 `L1.csv`：展示大小与行数；导出、编辑（最近 50 行）、清空数据集。
-- 显示夜间 L1 训练进度与预计剩余时间。
+- 显示 L1 训练进度与预计剩余时间；提供“训练（NB）”按钮，直接触发端侧朴素贝叶斯训练。
+- 训练完成且准确率≥90%时自动采用导出模型（优先 TFLite，其次 NB JSON），并更新设置。
 - 需要配图：
-  - 数据集管理页（含进度条/剩余时间）→ `docs/images/dataset_manage.png`
+  - 数据集管理页（含进度条/剩余时间与训练按钮）→ `docs/images/dataset_manage.png`
 
 **Model 管理**（`ui/screen/ModelManageScreen.kt`）
-- 管理本地 `.tflite` 模型：展示名称、大小、准确率；选择模型与导出。
-- 提供“启用学习 L1 模型”的开关。
+- 管理本地 `.tflite` 与 `.json`（Naive Bayes）模型：展示名称、大小、准确率（读取同名或目录下 `metrics.json`）；选择与导出。
+- 提供“使用本地训练模型”开关与“使用此模型”按钮，统一在此页面完成模型切换。
 - 需要配图：
-  - 模型管理页（含准确率展示）→ `docs/images/model_manage.png`
+  - 模型管理页（含准确率展示与 NB/TFLite 列表）→ `docs/images/model_manage.png`
 
 **Debug（调试）**（`ui/screen/DebugScreen.kt`，若存在）
 - 调试入口，便于查看 L2/L3 识别情况与线程覆盖等。
@@ -93,7 +93,7 @@
   
   - 文本统一预处理：`L1TextPreprocessor.asciiNormalizeForL1` 执行 NFKC 规范化、URL/Email/Phone/Code/运单号占位替换、空白压缩与小写化，并将中文转为拼音或码点；训练（CSV 合并）与推理一致。
   
-  - 动态加载模型：优先本地学习模型（如存在且启用），否则使用 assets 模型；失败时关键词回退。
+  - 动态加载模型：优先本地学习模型（如存在且启用），否则使用 assets 模型；选择 NB JSON 可在“模型管理”页完成；失败时关键词回退。
   
   - 融合判断（可配置）：支持选择 JSON（Naive Bayes）模型并与 MediaPipe 融合；当融合开启时，若 MP 置信度≥0.70 直接采用，否则若 NB 置信度≥0.70 采用，否则按用户权重（默认 0.5/0.5）对三类分布加权融合；当融合关闭且选择 JSON，仅使用 NB。
   
@@ -122,7 +122,9 @@
 - `L1NightTrainWorker.kt`：
   - 夜间/强制训练 L1：合并数据集、写训练请求、记录进度（0..80）。
   - 合并 CSV 时使用统一文本预处理（`L1TextPreprocessor`），确保与推理一致。
-  - 训练完成若准确率≥90%，采用 `L1_learned.tflite` 并更新设置与度量文件。
+  - 端侧朴素贝叶斯训练：`L1NaiveBayes.trainAndExport(...)` 将模型导出到 `gatekeeper_export`。
+  - 训练完成若准确率≥90%，优先采用导出的 TFLite（存在时），否则采用 NB JSON；均更新设置与度量文件。
+  - 兼容导出目录：`gatekeeper_export/` 与 `awe_export_ascii/`（均可包含 `model.tflite`、`model_nb.json` 与 `metrics.json`）。
 
 ## 权限与系统集成
 - Manifest：
@@ -186,7 +188,7 @@
 - L3‑B SLM 集成：llama.cpp JNI（CMake 引入），GBNF 约束输出严格 JSON，含超时与回退。
 - 待办与小部件：To‑Do 列表、桌面部件（今天/明天切换）、快速标记完成。
 - 权限与渠道：通知使用权引导、验证码复制通知渠道。
-- 设置与管理：电量阈值、L3 线程数、L1 学习模型选择；数据集/模型管理页面。
+- 设置与管理：电量阈值、L3 线程数；数据集/模型管理页面（模型选择统一在模型管理页）。
 - 背景任务：中优先级门控与批处理；夜间 L1 训练流程与自动采用条件。
 
 未完成 / 待完善

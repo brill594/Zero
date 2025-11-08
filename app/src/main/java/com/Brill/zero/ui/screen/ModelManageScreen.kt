@@ -18,6 +18,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import org.json.JSONObject
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
 
 @Composable
 fun ModelManageScreen(onBack: () -> Unit = {}) {
@@ -29,6 +31,32 @@ fun ModelManageScreen(onBack: () -> Unit = {}) {
     val modelsDir = remember { File(context.noBackupFilesDir, "models").apply { mkdirs() } }
     var models by remember { mutableStateOf(listModelsWithMetrics(modelsDir)) }
     var toExport by remember { mutableStateOf<File?>(null) }
+    var selectedPath by remember { mutableStateOf(com.brill.zero.settings.AppSettings.getL1SelectedModelPath(context)) }
+    var importHint by remember { mutableStateOf<String?>(null) }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                val ts = SimpleDateFormat("yyyyMMdd_HHmmss").format(Date())
+                val dest = File(modelsDir, "nb_${ts}.json")
+                context.contentResolver.openInputStream(uri)?.use { `in` ->
+                    dest.outputStream().use { out -> `in`.copyTo(out) }
+                }
+                // 更新排序依据为文件修改时间
+                dest.setLastModified(System.currentTimeMillis())
+                // 选择并启用该模型
+                selectedPath = dest.absolutePath
+                com.brill.zero.settings.AppSettings.setL1SelectedModelPath(context, dest.absolutePath)
+                com.brill.zero.settings.AppSettings.setUseLearnedL1(context, true)
+                // 刷新列表
+                models = listModelsWithMetrics(modelsDir)
+            }.onFailure {
+                android.util.Log.w("ModelManage", "Import NB model failed: ${it.message}")
+            }
+        }
+    }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream")
@@ -50,7 +78,6 @@ fun ModelManageScreen(onBack: () -> Unit = {}) {
 
     // 当前选择与使用状态
     var useLearned by remember { mutableStateOf(com.brill.zero.settings.AppSettings.getUseLearnedL1(context)) }
-    var selectedPath by remember { mutableStateOf(com.brill.zero.settings.AppSettings.getL1SelectedModelPath(context)) }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Box(modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp)) {
@@ -69,13 +96,80 @@ fun ModelManageScreen(onBack: () -> Unit = {}) {
 
         Spacer(Modifier.height(12.dp))
 
+        // 选择本地 NB 模型（导入 .json 文件到 models 目录），列表按训练时间（最近修改时间）排序
+        ElevatedCard(shape = RoundedCornerShape(18.dp), colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF1A1A1A)), modifier = Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("选择本地 NB 模型（.json）", color = Color(0xFFE6E6E6), style = MaterialTheme.typography.titleMedium.copy(fontFamily = vt323), modifier = Modifier.weight(1f))
+                Button(onClick = { importLauncher.launch(arrayOf("application/json")) }, colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)) { Text("选择") }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // 一键导入最新训练模型（从 training/*/model_nb.json 复制到 models）
+        ElevatedCard(shape = RoundedCornerShape(18.dp), colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF1A1A1A)), modifier = Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("导入最新训练模型", color = Color(0xFFE6E6E6), style = MaterialTheme.typography.titleMedium.copy(fontFamily = vt323), modifier = Modifier.weight(1f))
+                Button(onClick = {
+                    runCatching {
+                        val trainRoot = File(context.noBackupFilesDir, "training")
+                        val candidates = listOf(
+                            File(trainRoot, "gatekeeper_export/model_nb.json"),
+                            File(trainRoot, "awe_export_ascii/model_nb.json")
+                        )
+                        val src = candidates.firstOrNull { it.exists() }
+                        if (src != null) {
+                            val ts = SimpleDateFormat("yyyyMMdd_HHmmss").format(Date())
+                            val dest = File(modelsDir, "nb_${ts}.json")
+                            src.inputStream().use { `in` -> dest.outputStream().use { out -> `in`.copyTo(out) } }
+                            // 同步 metrics（若存在）
+                            val metricsSrc = File(src.parentFile, "metrics.json")
+                            if (metricsSrc.exists()) {
+                                File(modelsDir, dest.nameWithoutExtension + ".metrics.json").outputStream().use { out ->
+                                    metricsSrc.inputStream().use { `in` -> `in`.copyTo(out) }
+                                }
+                            }
+                            dest.setLastModified(System.currentTimeMillis())
+                            selectedPath = dest.absolutePath
+                            com.brill.zero.settings.AppSettings.setL1SelectedModelPath(context, dest.absolutePath)
+                            com.brill.zero.settings.AppSettings.setUseLearnedL1(context, true)
+                            models = listModelsWithMetrics(modelsDir)
+                            importHint = "已导入并选择: ${dest.name}"
+                        } else {
+                            importHint = "未找到训练导出模型，请先在数据集管理页进行训练或手动选择文件"
+                        }
+                    }.onFailure {
+                        importHint = "导入失败: ${it.message}"
+                        android.util.Log.w("ModelManage", "Import latest failed: ${it.message}")
+                    }
+                }, colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)) { Text("一键导入") }
+            }
+            if (importHint != null) {
+                Text(importHint!!, color = Color(0xFF9E9E9E), style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // 空状态提示
+        if (models.isEmpty()) {
+            ElevatedCard(shape = RoundedCornerShape(18.dp), colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF1A1A1A)), modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text("暂无本地模型", color = Color(0xFFE6E6E6), style = MaterialTheme.typography.titleMedium.copy(fontFamily = vt323))
+                    Text("请点击上方‘选择本地 NB 模型（.json）’或‘一键导入最新训练模型’，或前往‘数据集管理’进行训练。", color = Color(0xFF9E9E9E), style = MaterialTheme.typography.labelSmall)
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
         LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(models) { m ->
                 ElevatedCard(shape = RoundedCornerShape(16.dp), colors = CardDefaults.elevatedCardColors(containerColor = Color(0xFF1A1A1A)), modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.fillMaxWidth().padding(12.dp)) {
                         Text(m.name, color = Color(0xFFE6E6E6), style = MaterialTheme.typography.titleMedium.copy(fontFamily = vt323))
                         val accText = m.accuracy?.let { "准确率: %.2f%%".format(it * 100) } ?: "准确率: 未知"
-                        Text("大小: ${formatSize(m.size)} | ${accText}", color = Color(0xFF9E9E9E), style = MaterialTheme.typography.labelSmall)
+                        val timeText = SimpleDateFormat("yyyy-MM-dd HH:mm").format(Date(m.file.lastModified()))
+                        Text("大小: ${formatSize(m.size)} | ${accText} | 训练时间: ${timeText}", color = Color(0xFF9E9E9E), style = MaterialTheme.typography.labelSmall)
 
                         Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             val isActive = selectedPath?.let { File(it).absolutePath == m.file.absolutePath } == true && useLearned

@@ -45,6 +45,7 @@ fun DatasetManageScreen(onOpenSettings: () -> Unit = {}) {
     var progressEpoch by remember { mutableStateOf(0) }
     var trainStartTs by remember { mutableStateOf(0L) }
     var trainLastUpdateTs by remember { mutableStateOf(0L) }
+    var trainingRequested by remember { mutableStateOf(false) }
 
     // 安排夜间训练（一次性），由 Worker 内部约束充电+闲置
     LaunchedEffect(Unit) {
@@ -57,6 +58,7 @@ fun DatasetManageScreen(onOpenSettings: () -> Unit = {}) {
             progressEpoch = AppSettings.getL1TrainProgressEpoch(context)
             trainStartTs = AppSettings.getL1TrainStartTs(context)
             trainLastUpdateTs = AppSettings.getL1TrainLastUpdateTs(context)
+            if (progressEpoch > 0 && trainingRequested) trainingRequested = false
             kotlinx.coroutines.delay(500)
         }
     }
@@ -180,36 +182,35 @@ fun DatasetManageScreen(onOpenSettings: () -> Unit = {}) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     val progress = (progressEpoch.coerceIn(0, 80)) / 80f
-                    LinearProgressIndicator(
-                        progress = progress,
-                        modifier = Modifier.weight(1f).height(6.dp),
-                        color = Color(0xFF66CC66)
-                    )
+                    if (progressEpoch > 0) {
+                        CircularProgressIndicator(
+                            progress = progress,
+                            modifier = Modifier.size(32.dp),
+                            color = Color(0xFF66CC66)
+                        )
+                    } else if (trainingRequested) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(32.dp),
+                            color = Color(0xFF66CC66)
+                        )
+                    } else {
+                        Box(Modifier.size(32.dp)) {}
+                    }
                     Spacer(Modifier.width(12.dp))
-                    val etaText = remember(progressEpoch, trainStartTs) {
-                        if (progressEpoch <= 0 || trainStartTs <= 0L) "预计剩余: --"
-                        else {
-                            val elapsed = System.currentTimeMillis() - trainStartTs
-                            val avgPerEpoch = elapsed.toDouble() / progressEpoch.toDouble()
-                            val remaining = (80 - progressEpoch).coerceAtLeast(0)
-                            val etaMs = (avgPerEpoch * remaining).toLong()
-                            val mins = etaMs / 60000
-                            val secs = (etaMs % 60000) / 1000
-                            "预计剩余: %02d:%02d".format(mins, secs)
-                        }
+                    val rightText = remember(progressEpoch, trainingRequested) {
+                        if (trainingRequested && progressEpoch <= 0) "加载数据中"
+                        else "当前 Epoch: ${progressEpoch}/80"
                     }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text("当前 Epoch: ${progressEpoch}/80", color = Color(0xFF9E9E9E), style = MaterialTheme.typography.labelSmall)
-                        Text(etaText, color = Color(0xFF9E9E9E), style = MaterialTheme.typography.labelSmall)
-                    }
+                    Text(rightText, color = Color(0xFF9E9E9E), style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f))
                     Button(
                         onClick = {
+                            trainingRequested = true
                             scope.launch(Dispatchers.IO) {
                                 // 主动触发训练（忽略 gating）
                                 L1NightTrainWorker.enqueueNow(context, force = true)
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3366FF))
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black)
                     ) { Text("训练（NB）") }
                 }
             }
