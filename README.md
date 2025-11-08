@@ -52,28 +52,33 @@
 
 **Settings（设置）**（`ui/screen/SettingsScreen.kt`）
 - 配置电量阈值、L3 线程数；跳转到数据集管理与模型管理。
+
 - 注：已移除设置页中的“L1 模型选择”卡片，改由“模型管理”页统一开关与选择。
+
 - L1 融合判断：启用后对 TFLite 与 Naive Bayes 进行融合；可调 TFLite 权重（NB 权重自动为 1 − TFLite）。
+
 - 默认：融合关闭、权重 0.5/0.5；阈值 MP=0.70、NB=0.70。
+
 - 调试：查看日志 `ZeroL1-MP`、`ZeroL1-NB`、`ZeroL1-Fusion`。
-- 需要配图：
-  - 设置页总览 → `docs/images/settings_main.png`
-  - L1 融合判断设置 → `docs/images/settings_l1_fusion.png`
+
+  ![3](pngs/3.png)
 
 **Dataset 管理**（`ui/screen/DatasetManageScreen.kt`）
 - 管理 `L1.csv`：展示大小与行数；导出、编辑（最近 50 行）、清空数据集。
+
 - 显示 L1 训练进度与预计剩余时间；提供“训练（NB）”按钮，直接触发端侧朴素贝叶斯训练。
+
 - 训练完成且准确率≥90%时自动采用导出模型（优先 TFLite，其次 NB JSON），并更新设置。
-- 需要配图：
-  - 数据集管理页（含进度条/剩余时间与训练按钮）→ `docs/images/dataset_manage.png`
+
+  ![4](pngs/4.png)
 
 **Model 管理**（`ui/screen/ModelManageScreen.kt`）
 - 管理本地 `.tflite` 与 `.json`（Naive Bayes）模型：展示名称、大小、准确率（读取同名或目录下 `metrics.json`）；选择与导出。
 - 提供“使用本地训练模型”开关与“使用此模型”按钮，统一在此页面完成模型切换。
-- 需要配图：
-  - 模型管理页（含准确率展示与 NB/TFLite 列表）→ `docs/images/model_manage.png`
+- ![5](pngs/5.png)
 
-**Debug（调试）**（`ui/screen/DebugScreen.kt`，若存在）
+**Debug（调试）**（`ui/screen/DebugScreen.kt`）
+
 - 调试入口，便于查看 L2/L3 识别情况与线程覆盖等。
 
 ## 架构与数据流
@@ -118,7 +123,8 @@
 - `MediumPriorityWorker.kt`：
   - 批量处理 `nextMediumBatch`，调用 SLM 并写入待办，线程数取自 Settings。
 - `NightlyTrainingWorker.kt`：
-  - 占位 worker（No‑Op），设计用于设备空闲/充电/夜间的 on‑device 训练或标注导出。
+  
+  设计用于设备空闲/充电/夜间的 on‑device 训练或标注导出。
 - `L1NightTrainWorker.kt`：
   - 夜间/强制训练 L1：合并数据集、写训练请求、记录进度（0..80）。
   - 合并 CSV 时使用统一文本预处理（`L1TextPreprocessor`），确保与推理一致。
@@ -132,36 +138,30 @@
   - 读取外部存储（用于本地模型加载）：`READ_EXTERNAL_STORAGE`。
 - 通知监听服务：`ZeroNotificationListenerService`（需系统设置中授予）。
 - 通知渠道：验证码复制按钮使用专用渠道（`ZeroApp.kt` 中创建）。
-- 需要配图：
-  - 系统权限页（通知使用权）→ `docs/images/permission_notification_access.png`
 
 ## 数据存储与持久化
 - Room 数据库：`ZeroDatabase.kt`（表 `notifications`, `todos`）。
   - `NotificationEntity`：key/pkg/title/text/postedAt/priority/userPriority/processed/pushed。
   - `TodoEntity`：id/title/dueAt/createdAt/status/sourceNotificationKey。
 - 仓库：`ZeroRepository.kt` 封装读写与流，写入待办后刷新桌面 Widget。
-- 需要配图：
-  - 简易 ER 图（Notification/Todo 关系）→ `docs/images/db_er.png`
 
 ## 资源与资产（assets）
 - `assets/Grammar/`：GBNF 语法（`json_ie.gbnf`）。
 - `assets/models/`：L1/L2 种子模型与 L3 GGUF 模型。
 - `assets/datasets/`：CSV 训练/测试数据。
 - `assets/fonts/`：字体资源（如需要）。
-- 需要配图：
-  - 资源目录结构快照 → `docs/images/assets_tree.png`
 
 ## 桌面小部件（Widgets）
 - Glance `ZeroWidget.kt`：显示最近 HIGH 优先级推送的标题（最多三条）。
+
 - AppWidget `TodoWidgetProvider.kt` + `TodoWidgetService.kt`：
   - 显示“今天/明天”到期的待办（5 条以内）；支持“切换明天”“手动刷新”。
   - 点击列表项可直达 App 的 To‑Do 页面；支持在列表中标记完成（广播）。
   - 稳定性优化：使用部分更新与适配器数据刷新，避免主机重绑引起缩放异常。
-- 需要配图：
-  - 桌面 To‑Do 小部件（正常与“明天”切换）→ `docs/images/widget_todo.png`
-  - Glance Widget（HIGH 通知概览）→ `docs/images/widget_glance.png`
+  
+  ![截圖 2025-11-08 11.20.37](pngs/6.png)
 
-## 截图与配图清单（需要配图）
+## 截图与配图清单
 - Dashboard 权限提示与入口 → `docs/images/dashboard_permission.png`
 - To‑Do 列表与手动添加 → `docs/images/todo_list.png`, `docs/images/todo_manual_add.png`
 - History 分类列表与操作菜单 → `docs/images/history_list.png`
@@ -192,7 +192,6 @@
 - 背景任务：中优先级门控与批处理；夜间 L1 训练流程与自动采用条件。
 
 未完成 / 待完善
-- NightlyTrainingWorker：占位，无实际训练/导出逻辑；需要接入 on‑device 训练或外部脚本。
 - L3 采样策略：JNI 已具备温度/Top‑p 采样链路，但 UI 暂未提供参数配置；默认近似贪婪。
 - GPU 卸载配置：JNI 支持按设备探测与层数覆盖，UI 暂未暴露 GPU 层设置。
 - 数据集编辑器：当前仅支持最近 50 行的轻量编辑，后续可提供全文/筛选编辑。
@@ -219,6 +218,3 @@
 - `app/src/main/java/com/brill/zero/data/db/`：Room 数据库与实体。
 - `app/src/main/java/com/brill/zero/data/repo/ZeroRepository.kt`：仓库封装与 Widget 刷新。
 - `app/src/main/java/com/brill/zero/widget/`：桌面部件（Glance/RemoteViews）。
-
-——
-如需补充或修改 README 的结构与配图方案，请告知我偏好的格式或需要强调的模块，我会及时更新。
